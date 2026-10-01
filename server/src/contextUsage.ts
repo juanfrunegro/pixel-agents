@@ -7,6 +7,7 @@ import {
   CONTEXT_WINDOW_TIERS,
   DEFAULT_MAX_CONTEXT_TOKENS,
 } from './constants.js';
+import { registrarUso } from './personal/personal.js';
 import type { AgentState } from './types.js';
 
 /**
@@ -108,6 +109,8 @@ export function updateContextUsage(
   record: unknown,
   provider?: HookProvider | null,
 ): void {
+  if ((record as TranscriptRecord | null)?.isSidechain !== true)
+    registrarUso(agentId, agent, agents, record); // personal: modelo y costo
   const tokens = extractContextTokens(record);
   if (tokens <= 0) return;
   const isSidechain = (record as TranscriptRecord | null)?.isSidechain === true;

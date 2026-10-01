@@ -38,7 +38,9 @@ export type ServerMessage =
   | ExternalAssetDirectoriesUpdated
   | AreaMappingsLoaded
   | WorkspaceFolders
-  | AgentDiagnostics;
+  | AgentDiagnostics
+  | AgentInfo
+  | AgentNamesLoaded;
 
 export type ClientMessage =
   | WebviewReady
@@ -62,7 +64,9 @@ export type ClientMessage =
   | RemoveExternalAssetDirectory
   | SaveAreaMappings
   | SetShowAreas
-  | RequestDiagnostics;
+  | RequestDiagnostics
+  | RenameAgent
+  | ShutdownServer;
 
 export interface ProviderCapabilities {
   type: 'providerCapabilities';
@@ -315,6 +319,20 @@ export interface AgentDiagnostics {
   agents: Record<string, any>[];
 }
 
+export interface AgentInfo {
+  type: 'agentInfo';
+  id: number;
+  model?: string;
+  costUsd?: number;
+}
+
+export interface AgentNamesLoaded {
+  type: 'agentNamesLoaded';
+  ceo: string;
+  agentes: Record<string, string>;
+  descartables: string[];
+}
+
 export interface WebviewReady {
   type: 'webviewReady';
 }
@@ -428,4 +446,14 @@ export interface SetShowAreas {
 
 export interface RequestDiagnostics {
   type: 'requestDiagnostics';
+}
+
+export interface RenameAgent {
+  type: 'renameAgent';
+  clave: string;
+  nombre: string;
+}
+
+export interface ShutdownServer {
+  type: 'shutdownServer';
 }

@@ -13,6 +13,7 @@ import {
 } from './configPersistence.js';
 import { HUE_SHIFT_MAX_DEG, PALETTE_COUNT } from './constants.js';
 import { readLayoutFromFile, writeLayoutToFile } from './layoutPersistence.js';
+import { guardarNombre, mensajeNombres } from './personal/personal.js';
 import type { ConsentEffects } from './providers/hook/consentExecutor.js';
 import { applyConsentChoice } from './providers/hook/consentExecutor.js';
 import { hooksConsentRequest } from './providers/hook/consentGate.js';
@@ -270,6 +271,22 @@ export function handleClientMessage(
       break;
     }
 
+    // Personal (copia de juanfrunegro)
+    case 'renameAgent': {
+      if (typeof msg.clave === 'string' && typeof msg.nombre === 'string') {
+        store.broadcast(mensajeNombres(guardarNombre(msg.clave, msg.nombre)));
+      }
+      break;
+    }
+    case 'shutdownServer': {
+      // Solo una conexión con token (la del navegador de la PC) puede apagarlo.
+      if (ctx.privileged) {
+        console.log('[Pixel Agents] Apagado pedido desde la oficina.');
+        setTimeout(() => process.exit(0), 300);
+      }
+      break;
+    }
+
     default:
       // focusAgent, exportLayout, importLayout
       // require IDE-specific handling (not yet implemented for standalone)
@@ -514,5 +531,6 @@ function handleWebviewReady(send: WsSend, ctx: ClientMessageContext): void {
   // 8. Agent state, AFTER layoutLoaded -- the characters they target only
   // exist once the layout flush creates them. Without this a reconnecting
   // client shows bare characters until each agent takes another turn.
+  send(mensajeNombres()); // personal: nombres de fantasía antes de la actividad
   resendAgentActivity(send, store);
 }

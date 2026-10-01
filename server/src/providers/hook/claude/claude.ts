@@ -8,6 +8,7 @@ import {
   BASH_COMMAND_DISPLAY_MAX_LENGTH,
   TASK_DESCRIPTION_DISPLAY_MAX_LENGTH,
 } from '../../../constants.js';
+import { metaDeSubagente } from '../../../personal/personal.js';
 import {
   areHooksInstalled as installerAreHooksInstalled,
   installHooks as installerInstallHooks,
@@ -50,8 +51,8 @@ export function formatToolStatus(toolName: string, input?: unknown): string {
     case 'Agent': {
       const desc = typeof inp.description === 'string' ? inp.description : '';
       return desc
-        ? `Subtask: ${desc.length > TASK_DESCRIPTION_DISPLAY_MAX_LENGTH ? desc.slice(0, TASK_DESCRIPTION_DISPLAY_MAX_LENGTH) + '\u2026' : desc}`
-        : 'Running subtask';
+        ? `Subtask: ${desc.length > TASK_DESCRIPTION_DISPLAY_MAX_LENGTH ? desc.slice(0, TASK_DESCRIPTION_DISPLAY_MAX_LENGTH) + '\u2026' : desc}${metaDeSubagente(inp)}`
+        : `Running subtask${metaDeSubagente(inp)}`;
     }
     case 'AskUserQuestion':
       return 'Waiting for your answer';

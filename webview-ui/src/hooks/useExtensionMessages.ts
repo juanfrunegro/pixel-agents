@@ -19,6 +19,7 @@ import {
 } from '../office/toolUtils.js';
 import type { OfficeLayout, ToolActivity } from '../office/types.js';
 import { setWallSprites } from '../office/wallTiles.js';
+import { alMensaje, registrarSub } from '../personal/personal.js';
 import { isBrowserRuntime, isE2E } from '../runtime.js';
 import { transport } from '../transport/index.js';
 
@@ -185,6 +186,7 @@ export function useExtensionMessages(
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const handler = (msg: any) => {
+      alMensaje(msg); // personal: nombres, modelo/costo y meta del sub-agente (limpia el status)
       const os = getOfficeState();
       // CI / e2e diagnostic: record every received transport message on the
       // window-side log. The fixture reads window.__pixelAgentsTestHooks.
@@ -402,6 +404,7 @@ export function useExtensionMessages(
         ) {
           const label = status.startsWith('Subtask:') ? status.slice('Subtask:'.length).trim() : '';
           const subId = os.addSubagent(id, toolId);
+          registrarSub(subId, id, toolId); // personal
           setSubagentCharacters((prev) => {
             if (prev.some((s) => s.id === subId)) return prev;
             return [...prev, { id: subId, parentAgentId: id, parentToolId: toolId, label }];
@@ -549,6 +552,7 @@ export function useExtensionMessages(
         let subId = os.getSubagentId(id, parentToolId);
         if (subId === null) {
           subId = os.addSubagent(id, parentToolId);
+          registrarSub(subId, id, parentToolId); // personal
           const newSubId = subId;
           setSubagentCharacters((prev) => {
             if (prev.some((s) => s.id === newSubId)) return prev;

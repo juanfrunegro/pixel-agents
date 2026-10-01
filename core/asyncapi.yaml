@@ -118,6 +118,9 @@ components:
         - $ref: '#/components/schemas/WorkspaceFolders'
         # Diagnostics
         - $ref: '#/components/schemas/AgentDiagnostics'
+        # Personal (copia de juanfrunegro): nombres, ficha y modelo
+        - $ref: '#/components/schemas/AgentInfo'
+        - $ref: '#/components/schemas/AgentNamesLoaded'
       discriminator: type
 
     ClientMessage:
@@ -144,7 +147,68 @@ components:
         - $ref: '#/components/schemas/SaveAreaMappings'
         - $ref: '#/components/schemas/SetShowAreas'
         - $ref: '#/components/schemas/RequestDiagnostics'
+        # Personal (copia de juanfrunegro)
+        - $ref: '#/components/schemas/RenameAgent'
+        - $ref: '#/components/schemas/ShutdownServer'
       discriminator: type
+
+    # ── Personal (copia de juanfrunegro) ──────────────────────────
+
+    AgentInfo:
+      description: Modelo y costo equivalente (a precio de API) de una sesión, leídos de su transcript.
+      type: object
+      additionalProperties: false
+      required: [type, id]
+      properties:
+        type:
+          const: agentInfo
+        id:
+          type: integer
+        model:
+          type: string
+        costUsd:
+          type: number
+
+    AgentNamesLoaded:
+      description: Nombres de fantasía (~/.claude/agents/nombres.json).
+      type: object
+      additionalProperties: false
+      required: [type, ceo, agentes, descartables]
+      properties:
+        type:
+          const: agentNamesLoaded
+        ceo:
+          type: string
+        agentes:
+          type: object
+          additionalProperties:
+            type: string
+        descartables:
+          type: array
+          items:
+            type: string
+
+    RenameAgent:
+      description: Cambia el nombre de fantasía de un tipo de agente ("ceo" para la sesión principal).
+      type: object
+      additionalProperties: false
+      required: [type, clave, nombre]
+      properties:
+        type:
+          const: renameAgent
+        clave:
+          type: string
+        nombre:
+          type: string
+
+    ShutdownServer:
+      description: Apaga el servidor de Pixel Agents (botón Apagar).
+      type: object
+      additionalProperties: false
+      required: [type]
+      properties:
+        type:
+          const: shutdownServer
 
     # ── Server message variants ────────────────────────────────────
 

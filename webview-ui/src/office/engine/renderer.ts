@@ -44,6 +44,7 @@ import {
   VOID_TILE_DASH_PATTERN,
   VOID_TILE_OUTLINE_COLOR,
 } from '../../constants.js';
+import { colorModelo, modeloDe } from '../../personal/personal.js';
 import { getColorizedFloorSprite, hasFloorSprites, WALL_COLOR } from '../floorTiles.js';
 import { mapOffset } from '../projection.js';
 import {
@@ -445,16 +446,15 @@ export function renderScene(
       });
     }
 
+    const gafete = colorModelo(modeloDe(ch.id)); // personal: gafete del color del modelo en el pecho
     drawables.push({
       zY: charZY,
       draw: (c) => {
-        if (alpha === 1) {
-          c.drawImage(cached, drawX, drawY);
-          return;
-        }
         c.save();
         c.globalAlpha = alpha;
         c.drawImage(cached, drawX, drawY);
+        c.fillStyle = gafete;
+        c.fillRect(drawX + 9 * zoom, drawY + 19 * zoom, 2 * zoom, 2 * zoom);
         c.restore();
       },
     });

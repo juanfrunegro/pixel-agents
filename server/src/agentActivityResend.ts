@@ -1,4 +1,5 @@
 import type { AgentStateStore } from './agentStateStore.js';
+import { mensajeInfo } from './personal/personal.js';
 import { hasPromotedBackgroundAgent } from './teamUtils.js';
 
 /**
@@ -84,5 +85,9 @@ export function resendAgentActivity(
         maxContextTokens: agent.maxContextTokens,
       });
     }
+
+    // Personal: modelo y costo de la sesión (ficha)
+    const info = mensajeInfo(id, agent);
+    if (info) send(info);
   }
 }

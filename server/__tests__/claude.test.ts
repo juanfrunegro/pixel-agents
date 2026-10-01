@@ -244,10 +244,12 @@ describe('claudeProvider', () => {
       );
     });
     it('formats Task/Agent with description', () => {
-      expect(claudeProvider.formatToolStatus('Task', { description: 'Code review' })).toBe(
+      // Personal: el status lleva al final, tras U+2063, la meta del sub-agente (la pantalla la separa).
+      const visible = (s: string) => s.split('⁣')[0];
+      expect(visible(claudeProvider.formatToolStatus('Task', { description: 'Code review' }))).toBe(
         'Subtask: Code review',
       );
-      expect(claudeProvider.formatToolStatus('Agent', { description: 'Research' })).toBe(
+      expect(visible(claudeProvider.formatToolStatus('Agent', { description: 'Research' }))).toBe(
         'Subtask: Research',
       );
     });

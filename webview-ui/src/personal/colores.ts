@@ -1,0 +1,6 @@
+/** Personal: color del gafete por modelo (mismos colores que el organigrama). */
+export const COLOR_OPUS = '#e8832a';
+export const COLOR_SONNET = '#3b9bd6';
+export const COLOR_FABLE = '#a463e0';
+export const COLOR_HAIKU = '#4cb36a';
+export const COLOR_SIN_MODELO = '#9aa0ab';

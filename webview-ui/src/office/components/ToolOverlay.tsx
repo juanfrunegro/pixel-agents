@@ -18,6 +18,7 @@ import {
   TOOL_OVERLAY_VERTICAL_OFFSET,
 } from '../../constants.js';
 import type { SubagentCharacter } from '../../hooks/useExtensionMessages.js';
+import { colorModelo, modeloDe, nombreDe } from '../../personal/personal.js';
 import type { OfficeState } from '../engine/officeState.js';
 import { overlayProjection } from '../projection.js';
 import type { ToolActivity } from '../types.js';
@@ -202,7 +203,9 @@ export function ToolOverlay({
         }
 
         // Team info
-        const teamRoleLabel = ch.isTeamLead ? 'LEAD' : ch.agentName || null;
+        // Personal: nombre de fantasía (CEO, nombres.json o Marvel) en el color de su modelo
+        const teamRoleLabel = ch.isTeamLead ? 'LEAD' : ch.agentName || nombreDe(id);
+        const colorNombre = ch.isTeamLead || ch.agentName ? undefined : colorModelo(modeloDe(id));
         const hasExtraLines = !!(ch.folderName || teamRoleLabel);
 
         // Context gauge. Every agent gets one — lead, teammate, adopted,
@@ -238,8 +241,8 @@ export function ToolOverlay({
                     className="overflow-hidden text-ellipsis block leading-none"
                     style={{
                       fontSize: '18px',
-                      color: ch.isTeamLead ? TEAM_LEAD_COLOR : TEAM_ROLE_COLOR,
-                      fontWeight: ch.isTeamLead ? 'bold' : undefined,
+                      color: colorNombre ?? (ch.isTeamLead ? TEAM_LEAD_COLOR : TEAM_ROLE_COLOR),
+                      fontWeight: ch.isTeamLead || colorNombre ? 'bold' : undefined,
                     }}
                   >
                     {teamRoleLabel}
