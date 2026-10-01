@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import type { WorkspaceFolder } from '../hooks/useExtensionMessages.js';
+import { BotonesPersonales } from '../personal/BotonesPersonales.js';
 import { isBrowserRuntime } from '../runtime.js';
 import { transport } from '../transport/index.js';
 import { Button } from './ui/Button.js';
@@ -134,6 +135,7 @@ export function BottomToolbar({
       >
         Settings
       </Button>
+      <BotonesPersonales />
     </div>
   );
 }

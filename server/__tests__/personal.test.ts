@@ -1,6 +1,24 @@
+import Fastify from 'fastify';
 import { describe, expect, it } from 'vitest';
 
+import { htmlOrganigrama, registrarOrganigrama } from '../src/personal/organigrama.js';
 import { costoUsd, metaDeSubagente, SEPARADOR_META } from '../src/personal/personal.js';
+
+describe('personal: organigrama', () => {
+  it('arma una página aunque no haya nombres ni agentes', () => {
+    expect(htmlOrganigrama()).toContain('<title>Organigrama de agentes</title>');
+  });
+  it('sin el token de la oficina responde 403; con el token, la página', async () => {
+    const app = Fastify();
+    registrarOrganigrama(app, 'secreto');
+    expect((await app.inject({ url: '/organigrama' })).statusCode).toBe(403);
+    expect((await app.inject({ url: '/organigrama?token=otro' })).statusCode).toBe(403);
+    const ok = await app.inject({ url: '/organigrama?token=secreto' });
+    expect(ok.statusCode).toBe(200);
+    expect(ok.headers['content-type']).toContain('text/html');
+    await app.close();
+  });
+});
 
 describe('personal: costo equivalente a precio de API', () => {
   it('cobra entrada, caché y salida según el modelo', () => {

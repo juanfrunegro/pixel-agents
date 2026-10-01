@@ -68,19 +68,31 @@ export interface Definicion {
   esfuerzo?: string;
   descripcion?: string;
   archivo: string;
+  proyecto: string;
 }
 
 let indice: Map<string, Definicion> | null = null;
 let indiceHecho = 0;
 
-function carpetasDeAgentes(): string[] {
-  const dirs = [path.join(claude(), 'agents')];
-  const proyectos = path.join(claude(), 'agents-proyectos');
-  try {
-    for (const d of fs.readdirSync(proyectos)) dirs.push(path.join(proyectos, d));
-  } catch {
-    /* sin agentes de proyecto */
-  }
+/** Dónde viven los agentes: globales, de proyecto (agents-proyectos/<p>) y los de cada repo de IA Tools. */
+export function carpetasDeAgentes(): Array<{ dir: string; proyecto: string }> {
+  const dirs = [{ dir: path.join(claude(), 'agents'), proyecto: 'Todos' }];
+  const sub = (base: string, conAgents: boolean, nombre: (d: string) => string) => {
+    try {
+      for (const d of fs.readdirSync(base)) {
+        dirs.push({
+          dir: conAgents ? path.join(base, d, '.claude', 'agents') : path.join(base, d),
+          proyecto: nombre(d),
+        });
+      }
+    } catch {
+      /* no existe */
+    }
+  };
+  sub(path.join(claude(), 'agents-proyectos'), false, (d) =>
+    d === 'erp' ? 'ERP' : d[0].toUpperCase() + d.slice(1),
+  );
+  sub(path.join(os.homedir() || '.', 'Documents', 'IA Tools'), true, (d) => d.replace(/_/g, ' '));
   return dirs;
 }
 
@@ -93,7 +105,7 @@ function campo(frontmatter: string, nombre: string): string | undefined {
 export function definiciones(): Map<string, Definicion> {
   if (indice && Date.now() - indiceHecho < 30_000) return indice;
   const nuevo = new Map<string, Definicion>();
-  for (const dir of carpetasDeAgentes()) {
+  for (const { dir, proyecto } of carpetasDeAgentes()) {
     let archivos: string[] = [];
     try {
       archivos = fs.readdirSync(dir).filter((f) => f.endsWith('.md'));
@@ -111,6 +123,7 @@ export function definiciones(): Map<string, Definicion> {
           esfuerzo: campo(fm, 'effort'),
           descripcion: campo(fm, 'description'),
           archivo: path.join(dir, f),
+          proyecto,
         });
       } catch {
         /* archivo ilegible: se ignora */
