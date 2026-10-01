@@ -38,6 +38,7 @@ import type { HookEvent } from './hookEventHandler.js';
 import { HookEventHandler } from './hookEventHandler.js';
 import { assignPaletteIfNeeded } from './paletteAssigner.js';
 import { PathSet, pathsMatch } from './pathKey.js';
+import { proyectoDe } from './personal/personal.js';
 import { SessionRouter } from './sessionRouter.js';
 import { SubagentWatch } from './subagentWatch.js';
 import { cancelPermissionTimer, cancelWaitingTimer } from './timerManager.js';
@@ -506,7 +507,7 @@ export class AgentRuntime {
         lastDataAt: 0,
         linesProcessed: 0,
         seenUnknownRecordTypes: new Set(),
-        folderName: p.folderName,
+        folderName: proyectoDe({ projectDir: p.projectDir }) ?? p.folderName, // personal: área de su proyecto
         hookDelivered: false,
         contextTokens: 0,
         maxContextTokens: DEFAULT_MAX_CONTEXT_TOKENS,

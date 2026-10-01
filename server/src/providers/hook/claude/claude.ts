@@ -8,7 +8,7 @@ import {
   BASH_COMMAND_DISPLAY_MAX_LENGTH,
   TASK_DESCRIPTION_DISPLAY_MAX_LENGTH,
 } from '../../../constants.js';
-import { metaDeSubagente } from '../../../personal/personal.js';
+import { metaDeSubagente, raicesWsl } from '../../../personal/personal.js';
 import {
   areHooksInstalled as installerAreHooksInstalled,
   installHooks as installerInstallHooks,
@@ -113,7 +113,7 @@ function buildLaunchCommand(
 /** Root that holds every Claude session across all workspaces. Used by the
  *  global session scanner ("Watch All Sessions"). */
 function getAllSessionRoots(): string[] {
-  return [path.join(os.homedir(), '.claude', 'projects')];
+  return [path.join(os.homedir(), '.claude', 'projects'), ...raicesWsl()]; // personal: + sesiones de WSL
 }
 
 // ── normalizeHookEvent: the single Claude-specific normalization boundary ──

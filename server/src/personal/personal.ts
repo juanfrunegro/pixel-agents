@@ -61,6 +61,46 @@ export function mensajeNombres(n: Nombres = leerNombres()): Record<string, unkno
   return { type: 'agentNamesLoaded', ceo: n.ceo, agentes: n.agentes, descartables: n.descartables };
 }
 
+// ── Proyecto de cada agente (áreas de la oficina) y sesiones de WSL ──────────
+
+/** Reglas carpeta → proyecto. Sirve para la ruta real (cwd) y para la codificada de ~/.claude/projects. */
+const PROYECTOS: Array<[RegExp, string]> = [
+  [/documents-chaina/, 'Chaina'],
+  [/poker-app/, 'Poker'],
+  [/finanzas-personales/, 'Finanzas'],
+  [/projects-erp/, 'ERP'],
+  [/analisis-qf/, 'QF'],
+  [/pixel-agents/, 'Pixel'],
+  [/claude-brain|-claude$/, 'Brain'],
+  [/(^|-)ev(-|$)/, 'Pruebas'],
+];
+
+/** Resolver de carpeta para las Áreas: un agente en un workspace de Orca o en WSL cae en el área de su proyecto. */
+export function proyectoDe(ctx: { cwd?: string; projectDir?: string }): string | undefined {
+  for (const fuente of [ctx.cwd, ctx.projectDir ? path.basename(ctx.projectDir) : undefined]) {
+    if (!fuente) continue;
+    const s = fuente
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/-+$/, '');
+    const hit = PROYECTOS.find(([re]) => re.test(s));
+    if (hit) return hit[1];
+  }
+  return undefined;
+}
+
+/** Sesiones de Claude Code en WSL, leídas desde Windows: así una sola oficina muestra Windows y WSL. */
+export function raicesWsl(): string[] {
+  if (process.platform !== 'win32') return [];
+  const raiz =
+    process.env.PIXEL_WSL_PROJECTS ?? '\\\\wsl.localhost\\Ubuntu\\home\\juanf\\.claude\\projects';
+  try {
+    return fs.existsSync(raiz) ? [raiz] : [];
+  } catch {
+    return [];
+  }
+}
+
 // ── Definición de cada agente (frontmatter de su .md) ─────────────────────────
 
 export interface Definicion {

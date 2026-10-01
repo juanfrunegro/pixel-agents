@@ -2,7 +2,30 @@ import Fastify from 'fastify';
 import { describe, expect, it } from 'vitest';
 
 import { htmlOrganigrama, registrarOrganigrama } from '../src/personal/organigrama.js';
-import { costoUsd, metaDeSubagente, SEPARADOR_META } from '../src/personal/personal.js';
+import { costoUsd, metaDeSubagente, proyectoDe, SEPARADOR_META } from '../src/personal/personal.js';
+
+describe('personal: proyecto de cada agente (áreas)', () => {
+  it.each([
+    [{ cwd: 'C:\\Users\\juanf\\.claude\\brain' }, 'Brain'],
+    [{ cwd: 'C:\\Users\\juanf\\.claude' }, 'Brain'],
+    [{ projectDir: 'C:\\Users\\juanf\\.claude\\projects\\C--Users-juanf--claude-brain' }, 'Brain'],
+    [{ cwd: 'C:\\Users\\juanf\\Documents\\Chaina\\Centro de control' }, 'Chaina'],
+    [{ cwd: 'C:\\Users\\juanf\\Documents\\IA Tools\\Poker_App' }, 'Poker'],
+    [{ cwd: 'C:\\Users\\juanf\\orca\\workspaces\\Poker_App\\tests-deudas' }, 'Poker'],
+    [
+      { projectDir: 'x\\projects\\C--Users-juanf-Documents-IA-Tools-Finanzas-personales' },
+      'Finanzas',
+    ],
+    [{ cwd: '/home/juanf/Documents/Claude/Projects/ERP/.claude/worktrees/cobros' }, 'ERP'],
+    [{ projectDir: '/x/-home-juanf-Documents-Claude-Projects-ERP' }, 'ERP'],
+    [{ cwd: 'C:\\Users\\juanf\\ev\\circuito\\opus' }, 'Pruebas'],
+  ])('%o → %s', (ctx, esperado) => {
+    expect(proyectoDe(ctx)).toBe(esperado);
+  });
+  it('carpeta desconocida: sin proyecto (queda el comportamiento original)', () => {
+    expect(proyectoDe({ cwd: 'D:\\otra\\cosa' })).toBeUndefined();
+  });
+});
 
 describe('personal: organigrama', () => {
   it('arma una página aunque no haya nombres ni agentes', () => {
