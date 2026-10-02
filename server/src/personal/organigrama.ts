@@ -8,7 +8,7 @@ import * as os from 'os';
 import * as path from 'path';
 
 import { aspectoDePersona, personaDe } from '../../../core/src/aspectoPersonal.js';
-import { skinDeNombre } from '../../../core/src/skinsMarvel.js';
+import { skinDeNombre, SKINS_MARVEL } from '../../../core/src/skinsMarvel.js';
 import { PALETTE_COUNT } from '../constants.js';
 import type { Definicion, Nombres } from './personal.js';
 import { definiciones, esDeWsl, leerNombres, ordenPersonas } from './personal.js';
@@ -90,6 +90,32 @@ function avatar(persona: string, orden: string[], grande = false): string {
   const a = aspectoDePersona(persona, orden, PALETTE_COUNT) ?? { palette: 0, hueShift: 0 };
   const filtro = a.hueShift ? `;filter:hue-rotate(${a.hueShift}deg)` : '';
   return `<span class="av${grande ? ' g' : ''}" style="background-image:url(/assets/characters/char_${a.palette}.png)${filtro}" aria-hidden="true"></span>`;
+}
+
+/** Puestos de los externos de Marvel (solo estética: siempre en el organigrama, tengan o no un agente hoy). */
+const PUESTOS_MARVEL: Record<string, string> = {
+  hulk: 'Refactors de fuerza bruta',
+  spiderman: 'Telarañas de dependencias',
+  ironman: 'Arquitectura e infra',
+  thor: 'Deploys con martillo',
+  deadpool: 'QA de cuarta pared',
+};
+
+/**
+ * Clave de localStorage donde la oficina (mismo origen) publica qué skins de Marvel hay en pantalla ahora; la página
+ * la lee para marcar "en la oficina". Ver webview-ui/src/personal/skins.ts (publicarMarvelActivos).
+ */
+export const CLAVE_MARVEL_ACTIVOS = 'pixel.marvelActivos';
+
+function seccionExternos(orden: string[]): string {
+  const tarjetas = SKINS_MARVEL.map(
+    (s) =>
+      `<div class="mv" data-skin="${s.id}">${avatar(s.nombre, orden, true)}<div><b>${esc(s.nombre)}</b><span class="rol">${esc(PUESTOS_MARVEL[s.id])}</span><span class="est">disponible</span></div></div>`,
+  ).join('');
+  return `<section class="externos"><h2>Externos · tercerizados</h2><p class="rol">Consultores de Marvel: solo estética. Un agente con su nombre trabaja con su skin; el resto del tiempo esperan que los llamen.</p><div class="mvs">${tarjetas}</div></section>
+<script>(function(){function ver(){var a=[];try{var d=JSON.parse(localStorage.getItem('${CLAVE_MARVEL_ACTIVOS}')||'null');if(d&&Date.now()-d.t<20000)a=d.ids||[]}catch(e){}
+document.querySelectorAll('.mv').forEach(function(el){var on=a.indexOf(el.getAttribute('data-skin'))>=0;el.classList.toggle('on',on);el.querySelector('.est').textContent=on?'en la oficina':'disponible'})}
+ver();setInterval(ver,3000);window.addEventListener('storage',ver)})();</script>`;
 }
 
 interface Datos {
@@ -193,12 +219,18 @@ ul{list-style:none;margin:0 0 0 22px;padding:0 0 0 12px;border-left:2px solid #3
 .ag{display:flex;gap:8px;align-items:flex-start;border-left:4px solid #555;padding:14px 10px 6px 6px;background:#262a35;border-radius:3px}
 .ag div{display:grid;gap:2px;min-width:0}.ag.ext{border-left-style:dashed}
 .ag p{margin:0;font-size:13px;color:#c9cdd6}.int{font:12px ui-monospace,monospace;color:#9ba2b0;overflow-wrap:anywhere}.uso{font-size:12px;color:#9ba2b0}
+.externos{margin-top:22px;background:#1f222b;border:1px dashed #4a5163;border-radius:6px;padding:14px 12px}
+.mvs{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin-top:10px}
+.mv{display:flex;gap:10px;align-items:center;background:#262a35;border-left:4px dashed #6b7385;border-radius:3px;padding:18px 10px 8px}
+.mv div{display:grid;gap:2px}.mv b{font-size:16px}
+.est{font-size:11px;font-weight:700;justify-self:start;padding:0 6px;border-radius:3px;background:#3a4050;color:#c9cdd6}
+.mv.on{border-left:4px solid #4cb36a}.mv.on .est{background:#4cb36a;color:#111}
 .chip{font-size:11px;font-weight:700;color:#111;padding:0 6px;border-radius:3px;white-space:nowrap}.chip.wsl{background:${COLOR_WSL};color:#fff}.vac{margin:0 0 0 34px;color:#9ba2b0;font-size:13px}
 </style></head><body><h1>Organigrama de agentes</h1>
 <p class="sub">Armado en vivo con nombres.json, la definición de cada agente y el registro de rendimiento. Cada persona tiene su personaje, el mismo que usa en la oficina. Para cambiar un nombre: ficha del agente en la oficina o ~/.claude/agents/nombres.json (ahí también se cambian las áreas, con la clave "areas").</p>
 <div class="ley"><span><i style="background:#e8832a"></i>Opus</span><span><i style="background:#3b9bd6"></i>Sonnet</span><span><i style="background:#a463e0"></i>Fable</span><span><i style="background:#4cb36a"></i>Haiku</span><span><i style="background:#9aa0ab"></i>hereda del que lo lanza</span><span><i style="background:${COLOR_WSL}"></i>WSL: corre en WSL con la cuenta Max (el resto, en Windows con la Pro)</span></div>
 <div class="ceo"><div class="tarjeta">${avatar(ceo, orden, true)}<div><b>${esc(n.ceo)}</b><span class="rol">${esc(roles[ceo] ?? 'CEO')}</span><br><span class="int">sesión principal · en la oficina cada sesión tiene su propio personaje</span></div></div></div>
-<main>${bloques}${sin}</main></body></html>`;
+<main>${bloques}${sin}</main>${seccionExternos(orden)}</body></html>`;
 }
 
 /** Ruta GET /organigrama: solo con el token de la oficina (muestra información de los negocios). */

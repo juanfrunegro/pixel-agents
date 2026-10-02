@@ -58,6 +58,7 @@ import {
   reunir,
   sesionesQueSeCruzan,
 } from './reuniones.js';
+import { publicarMarvelActivos } from './skins.js';
 
 export const PERMANENCIA_MS = 5000;
 
@@ -305,6 +306,7 @@ let ultimaPoda = 0;
 
 export function tickPersonal(os: OfficeState, ahora = Date.now()): void {
   tickReuniones(os, ahora);
+  publicarMarvelActivos(os.characters.values(), ahora);
   if (ahora - ultimaPoda > PODA_MS) {
     ultimaPoda = ahora;
     podarPersonal((id) => os.characters.has(id), ahora);

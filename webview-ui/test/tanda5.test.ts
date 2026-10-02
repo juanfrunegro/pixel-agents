@@ -154,3 +154,38 @@ describe('tanda 5: skins de Marvel', () => {
     expect(spritesDeSkin({ id: 1, agentName: 'Hulk' })).toBeNull();
   });
 });
+
+describe('tanda 5: externos de Marvel en el organigrama', () => {
+  it('publica en localStorage las skins que hay en la oficina, sin escribir de más', async () => {
+    const { publicarMarvelActivos } = await import('../src/personal/skins.js');
+    const guardado: Record<string, string> = {};
+    let escrituras = 0;
+    const anterior = (globalThis as { localStorage?: unknown }).localStorage;
+    (globalThis as { localStorage?: unknown }).localStorage = {
+      setItem: (k: string, v: string) => {
+        escrituras++;
+        guardado[k] = v;
+      },
+    };
+    try {
+      const chars = [
+        { id: 901, agentName: 'Hulk · bugs' },
+        { id: 902, agentName: 'Thor' },
+        { id: 903, agentName: 'Pepe' },
+        { id: 904, agentName: 'Deadpool', matrixEffect: 'despawn' as const },
+      ];
+      publicarMarvelActivos(chars as never, 1_000_000);
+      expect(JSON.parse(guardado['pixel.marvelActivos'])).toEqual({
+        ids: ['hulk', 'thor'],
+        t: 1_000_000,
+      });
+      publicarMarvelActivos(chars as never, 1_001_000); // menos de 2 s: no hace nada
+      publicarMarvelActivos(chars as never, 1_003_000); // igual y menos de 10 s: no escribe
+      expect(escrituras).toBe(1);
+      publicarMarvelActivos(chars as never, 1_011_000); // refresca la marca de tiempo
+      expect(escrituras).toBe(2);
+    } finally {
+      (globalThis as { localStorage?: unknown }).localStorage = anterior;
+    }
+  });
+});

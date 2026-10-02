@@ -45,3 +45,33 @@ export function spritesDeSkin(ch: Pick<Character, 'id' | 'agentName'>): Characte
   const s = skinDe(ch);
   return s ? (sprites.get(s) ?? null) : null;
 }
+
+let ultimaPublicacion = 0;
+let publicado = '';
+
+/**
+ * Publica en localStorage qué skins de Marvel hay ahora en la oficina, para que el organigrama (misma origen, otra
+ * pestaña) marque a esos externos "en la oficina". Barato: como mucho cada 2 s y solo escribe si cambió (o para
+ * refrescar la marca de tiempo cada 10 s). Clave: CLAVE_MARVEL_ACTIVOS en server/src/personal/organigrama.ts.
+ */
+export function publicarMarvelActivos(
+  chars: Iterable<Pick<Character, 'id' | 'agentName' | 'matrixEffect'>>,
+  ahora = Date.now(),
+): void {
+  if (ahora - ultimaPublicacion < 2000) return;
+  const ids = new Set<string>();
+  for (const ch of chars) {
+    if (ch.matrixEffect === 'despawn') continue;
+    const s = skinDe(ch);
+    if (s) ids.add(s);
+  }
+  const lista = [...ids].sort().join(',');
+  if (lista === publicado && ahora - ultimaPublicacion < 10000) return;
+  ultimaPublicacion = ahora;
+  publicado = lista;
+  try {
+    localStorage.setItem('pixel.marvelActivos', JSON.stringify({ ids: [...ids].sort(), t: ahora }));
+  } catch {
+    // sin almacenamiento (modo privado, bloqueado): el organigrama los muestra "disponible"
+  }
+}

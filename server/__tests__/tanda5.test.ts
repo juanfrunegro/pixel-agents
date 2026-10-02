@@ -321,4 +321,19 @@ describe('tanda 5: skins de Marvel', () => {
     expect(html).toContain('/assets/characters/char_');
     expect(html).not.toContain('/assets/marvel/pepe');
   });
+
+  it('el organigrama muestra siempre a los cinco externos de Marvel con su skin y puesto', () => {
+    const html = htmlOrganigrama({
+      nombres: { ceo: 'Juan', agentes: {}, descartables: [], roles: { Juan: 'CEO' } },
+      defs: new Map(),
+      uso: new Map(),
+    } as never);
+    expect(html).toContain('Externos · tercerizados');
+    for (const id of ['hulk', 'spiderman', 'ironman', 'thor', 'deadpool']) {
+      expect(html).toContain(`data-skin="${id}"`);
+      expect(html).toContain(`/assets/marvel/${id}.png`);
+    }
+    expect(html).toContain('Deploys con martillo');
+    expect(html).toContain("localStorage.getItem('pixel.marvelActivos')");
+  });
 });
