@@ -26,3 +26,17 @@ export const SALAS_COMUNES: readonly string[] = [
 export function esSalaComun(nombre: string | null | undefined): boolean {
   return !!nombre && SALAS_COMUNES.includes(nombre);
 }
+
+/**
+ * Oficina de proyecto sin proyecto asignado (server/src/personal/ocupacion.ts): se llama "Libre 1", "Libre 2"… según su
+ * lugar en el plano. Nadie se sienta ahí ni la usa de paso; en la pared dice solo "Libre", tenue.
+ */
+export const PREFIJO_LIBRE = 'Libre ';
+
+export function nombreLibre(lugar: number): string {
+  return `${PREFIJO_LIBRE}${lugar + 1}`;
+}
+
+export function esOficinaLibre(nombre: string | null | undefined): boolean {
+  return !!nombre && /^Libre \d+$/.test(nombre);
+}

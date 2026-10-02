@@ -27,6 +27,7 @@ import { isRotatable } from './office/layout/furnitureCatalog.js';
 import { migrateLayoutColors } from './office/layout/layoutSerializer.js';
 import { getPetCount } from './office/sprites/petSpriteData.js';
 import { EditTool, type OfficeLayout } from './office/types.js';
+import { PanelComunicaciones } from './personal/Comunicaciones.js';
 import { FichaAgente } from './personal/FichaAgente.js';
 import { PanelAtencion } from './personal/PanelAtencion.js';
 import { PanelesPersonales } from './personal/PanelesPersonales.js';
@@ -443,6 +444,7 @@ function App() {
           <FichaAgente officeState={officeState} subagentCharacters={subagentCharacters} />
           <PanelAtencion officeState={officeState} />
           <PanelesPersonales colores={officeState.getLayout().areas} />
+          <PanelComunicaciones officeState={officeState} />
         </>
       ) : (
         <DebugView

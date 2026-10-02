@@ -20,7 +20,16 @@ import {
 } from '../../../core/src/salasComunes.js';
 import { readConfig, writeConfig } from '../configPersistence.js';
 import { LAYOUT_FILE_DIR, LAYOUT_FILE_NAME } from '../constants.js';
-import { writeLayoutToFile } from '../layoutPersistence.js';
+import { readLayoutFromFile, writeLayoutToFile } from '../layoutPersistence.js';
+import {
+  asignables,
+  guardarOcupacion,
+  leerOcupacion,
+  type Ocupacion,
+  ocupacionDelPlano,
+  rutaOcupacion,
+  salaDelLugar,
+} from './ocupacion.js';
 import { normalizarCarpeta, proyectoDe, PROYECTOS_CONOCIDOS, setReglasExtra } from './personal.js';
 
 export interface ProyectoOrca {
@@ -45,6 +54,8 @@ const COLORES: Record<string, string> = {
 };
 const PALETA = ['#d4a72c', '#2bb5a8', '#c75fa3', '#7f8cf0', '#8fbf3a', '#e06b4c'];
 const GRIS_ORCA = '#737373'; // color por defecto de Orca: no dice nada
+/** Oficina sin proyecto (ocupacion.ts): gris apagado, como el nombre tenue "Libre". */
+const COLOR_LIBRE = '#5d6370';
 const ORDEN = ['Brain', 'Chaina', 'Poker', 'Finanzas', 'ERP'];
 
 /** Dónde guarda Orca sus proyectos (perfil activo). PIXEL_ORCA_DATA lo pisa (tests). */
@@ -145,6 +156,25 @@ export function salasDesde(proyectos: ProyectoOrca[]): {
   });
   salas.push({ nombre: 'Otros', color: COLORES.Otros });
   return { salas, reglas };
+}
+
+/**
+ * Salas del plano según qué proyecto ocupa cada oficina (ocupacion.ts): las oficinas en su lugar fijo (libres como
+ * "Libre N"), el Brain y "Otros" al final. Los colores salen de salasDesde (los de siempre o los de Orca); un proyecto
+ * que ya no está en Orca conserva su oficina con su color conocido o uno de la paleta.
+ */
+export function salasConOcupacion(o: Ocupacion, deOrca: Sala[]): Sala[] {
+  const color = new Map(deOrca.map((s) => [s.nombre, s.color]));
+  let libre = 0;
+  const lugares = o.map((p, i): Sala => {
+    if (!p) return { nombre: salaDelLugar(o, i), color: COLOR_LIBRE };
+    return { nombre: p, color: color.get(p) ?? COLORES[p] ?? PALETA[libre++ % PALETA.length] };
+  });
+  return [
+    ...lugares,
+    { nombre: 'Brain', color: color.get('Brain') ?? COLORES.Brain },
+    { nombre: 'Otros', color: COLORES.Otros },
+  ];
 }
 
 /** Carpeta (lo que devuelve proyectoDe) → sala. Los proyectos conocidos sin sala propia van a "Otros". */
@@ -527,12 +557,49 @@ export interface ResultadoRecarga {
   puestos: number;
 }
 
+/** Proyectos de Orca que pueden ocupar una oficina (para el menú "Asignar proyecto"). */
+export function proyectosDisponibles(proyectos = leerProyectosOrca()): string[] {
+  return asignables(salasDesde(proyectos).salas.map((s) => s.nombre));
+}
+
+/** Ocupación actual: la guardada o, la primera vez, la del plano que ya está en ~/.pixel-agents/layout.json. */
+export function ocupacionActual(disponibles: string[]): Ocupacion {
+  return leerOcupacion(disponibles, rutaOcupacion(), () => {
+    const areas = (readLayoutFromFile() as { areas?: Array<{ label?: unknown }> } | null)?.areas;
+    return Array.isArray(areas)
+      ? ocupacionDelPlano(
+          areas.map((a) => a.label).filter((l): l is string => typeof l === 'string'),
+        )
+      : null;
+  });
+}
+
+/** Estado de las oficinas para el webview: qué hay en cada lugar y qué proyectos se pueden asignar. */
+export function mensajeOficinas(proyectos = leerProyectosOrca()): Record<string, unknown> {
+  const disponibles = proyectosDisponibles(proyectos);
+  const o = ocupacionActual(disponibles);
+  return {
+    type: 'oficinasEstado',
+    lugares: o.map((p, i) => ({ sala: salaDelLugar(o, i), proyecto: p })),
+    disponibles,
+  };
+}
+
 /**
- * Vuelve a leer los proyectos de Orca, regenera el plano y las asignaciones (con copia de lo anterior) y actualiza
- * las reglas carpeta → sala. No reinicia el servidor: los clientes recargan la página y reciben todo de nuevo.
+ * Vuelve a leer los proyectos de Orca y regenera el plano con las oficinas en su lugar fijo, cada una con el proyecto
+ * que Juan le asignó (ocupacion.ts; `ocupacion` la pisa al asignar), y las asignaciones carpeta → sala (con copia de lo
+ * anterior). Un proyecto nuevo de Orca no suma una oficina: queda disponible para asignar y mientras tanto va a
+ * "Otros". No reinicia el servidor: los clientes recargan la página y reciben todo de nuevo.
  */
-export function recargarOficina(original: Record<string, unknown>): ResultadoRecarga {
-  const { salas, reglas } = salasDesde(leerProyectosOrca());
+export function recargarOficina(
+  original: Record<string, unknown>,
+  ocupacion?: Ocupacion,
+): ResultadoRecarga {
+  const deOrca = salasDesde(leerProyectosOrca());
+  const o = ocupacion ?? ocupacionActual(asignables(deOrca.salas.map((s) => s.nombre)));
+  guardarOcupacion(o);
+  const reglas = deOrca.reglas;
+  const salas = salasConOcupacion(o, deOrca.salas);
   setReglasExtra(reglas);
   const layout = generarLayout(original, salas);
   const dir = path.join(os.homedir(), LAYOUT_FILE_DIR);

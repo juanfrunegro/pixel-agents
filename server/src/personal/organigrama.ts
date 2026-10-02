@@ -8,6 +8,7 @@ import * as os from 'os';
 import * as path from 'path';
 
 import { aspectoDePersona, personaDe } from '../../../core/src/aspectoPersonal.js';
+import { skinDeNombre } from '../../../core/src/skinsMarvel.js';
 import { PALETTE_COUNT } from '../constants.js';
 import type { Definicion, Nombres } from './personal.js';
 import { definiciones, esDeWsl, leerNombres, ordenPersonas } from './personal.js';
@@ -81,6 +82,11 @@ const AREAS: Record<string, string[]> = {
 
 /** Personaje pixelado de la persona: el mismo sprite (y tono) que tiene en la oficina. */
 function avatar(persona: string, orden: string[], grande = false): string {
+  // tanda 5: una persona que se llama como un personaje de Marvel con skin (Hulk, Thor…) lleva su skin
+  const skin = skinDeNombre(persona);
+  if (skin) {
+    return `<span class="av${grande ? ' g' : ''}" style="background-image:url(/assets/marvel/${skin}.png)" aria-hidden="true"></span>`;
+  }
   const a = aspectoDePersona(persona, orden, PALETTE_COUNT) ?? { palette: 0, hueShift: 0 };
   const filtro = a.hueShift ? `;filter:hue-rotate(${a.hueShift}deg)` : '';
   return `<span class="av${grande ? ' g' : ''}" style="background-image:url(/assets/characters/char_${a.palette}.png)${filtro}" aria-hidden="true"></span>`;

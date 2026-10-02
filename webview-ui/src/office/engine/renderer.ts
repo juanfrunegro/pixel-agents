@@ -1,3 +1,4 @@
+import { esOficinaLibre } from '../../../../core/src/salasComunes.js';
 import type { ColorValue } from '../../components/ui/types.js';
 import {
   AREA_ACTIVE_ALPHA_MULTIPLIER,
@@ -50,6 +51,7 @@ import { renderLuces, renderNoche } from '../../personal/luces.js';
 import { colorModelo, modeloDe } from '../../personal/personal.js';
 import { renderPizarra } from '../../personal/pizarra.js';
 import { PisoCacheado } from '../../personal/rendimiento.js';
+import { spritesDeSkin } from '../../personal/skins.js';
 import { getColorizedFloorSprite, hasFloorSprites, WALL_COLOR } from '../floorTiles.js';
 import { mapOffset } from '../projection.js';
 import {
@@ -291,15 +293,20 @@ export function renderAreaLabels(
     const filaNombre = acc.minY > 0 ? acc.minY - 1 : acc.sumY / acc.count;
     const cy = offsetY + (filaNombre + 0.5) * s;
 
+    // personal: una oficina sin proyecto ("Libre 3") dice solo "Libre", tenue
+    const libre = esOficinaLibre(label);
+    const texto = libre ? 'Libre' : label;
+    const tenue = libre ? 0.6 : 1;
+
     // Pixel-art drop shadow (1px right + down, no blur).
-    ctx.globalAlpha = AREA_LABEL_SHADOW_ALPHA;
+    ctx.globalAlpha = AREA_LABEL_SHADOW_ALPHA * tenue;
     ctx.fillStyle = AREA_LABEL_SHADOW_COLOR;
-    ctx.fillText(label, cx + 1, cy + 1);
+    ctx.fillText(texto, cx + 1, cy + 1);
 
     // Main label — area's own color, falling back to white if missing.
-    ctx.globalAlpha = AREA_LABEL_ALPHA;
+    ctx.globalAlpha = AREA_LABEL_ALPHA * tenue;
     ctx.fillStyle = colorMap.get(label) ?? AREA_LABEL_FALLBACK_COLOR;
-    ctx.fillText(label, cx, cy);
+    ctx.fillText(texto, cx, cy);
   }
   ctx.restore();
 }
@@ -398,7 +405,7 @@ export function renderScene(
 
   // Characters
   for (const ch of characters) {
-    const sprites = getCharacterSprites(ch.palette, ch.hueShift);
+    const sprites = spritesDeSkin(ch) ?? getCharacterSprites(ch.palette, ch.hueShift); // personal: skins de Marvel
     const spriteData = getCharacterSprite(ch, sprites);
     const cached = getCachedSprite(spriteData, zoom);
     // Sitting offset: shift character down when seated so they visually sit in the chair

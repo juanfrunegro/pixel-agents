@@ -9,6 +9,7 @@ import type { SubagentCharacter } from '../hooks/useExtensionMessages.js';
 import type { OfficeState } from '../office/engine/officeState.js';
 import { transport } from '../transport/index.js';
 import { COLOR_WINDOWS, COLOR_WSL } from './colores.js';
+import { InterruptorVoz } from './Comunicaciones.js';
 import {
   claveDe,
   colorModelo,
@@ -30,6 +31,7 @@ import {
   usePersonal,
   vozDe,
 } from './personal.js';
+import { skinDe } from './skins.js';
 
 interface Props {
   officeState: OfficeState;
@@ -91,6 +93,7 @@ export function FichaAgente({ officeState, subagentCharacters }: Props) {
   const modelo = modeloDe(id);
   const costo = costoDe(id);
   const nombre = ch.agentName || nombreDe(id);
+  const skin = skinDe(ch);
   const clave = claveDe(id);
   const pasos = historialDe(id);
   const interno = ch.agentName ? 'compañero de equipo' : meta ? meta.t : 'sesión principal (CEO)';
@@ -132,6 +135,22 @@ export function FichaAgente({ officeState, subagentCharacters }: Props) {
             display: 'inline-block',
           }}
         />
+        {skin && (
+          // tanda 5: skin de Marvel (solo estética): el primer cuadro mirando de frente, al doble
+          <span
+            title={`Skin de ${skin}`}
+            data-testid="ficha-skin"
+            style={{
+              width: 32,
+              height: 64,
+              display: 'inline-block',
+              backgroundImage: `url(./assets/marvel/${skin}.png)`,
+              backgroundSize: '224px 192px',
+              backgroundPosition: '0 0',
+              imageRendering: 'pixelated',
+            }}
+          />
+        )}
         {editando ? (
           <input
             autoFocus
@@ -189,6 +208,11 @@ export function FichaAgente({ officeState, subagentCharacters }: Props) {
       {sub?.label && <Fila etiqueta="Objetivo">{sub.label}</Fila>}
       <Fila etiqueta="Estado">{estado}</Fila>
       {avisos.length > 0 && <Fila etiqueta="Ojo">{avisos.join(' · ')}</Fila>}
+      {padre === null && !ch.isSubagent && (
+        <Fila etiqueta="Voz">
+          <InterruptorVoz id={id} />
+        </Fila>
+      )}
       <Fila etiqueta="En la oficina">{duracion(inicioDe(id))}</Fila>
       {costo !== undefined && (
         <Fila etiqueta="Costo">US$ {costo.toFixed(2)} (equivalente API)</Fila>

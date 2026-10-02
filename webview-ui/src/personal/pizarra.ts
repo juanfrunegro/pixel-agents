@@ -3,12 +3,13 @@
  * - Pizarra: en la pared del Brain (muebles "brain-pizarra-*" del plano), una fila por proyecto con su color, cuántos
  *   pendientes abiertos tiene (los PENDIENTES.md que lee el radar; el servidor los da en GET /pizarra) y un punto
  *   amarillo por cada agente suyo trabajando ahora. Clic en la pizarra → panel legible con el detalle.
- * - Menú de oficina: clic en el piso o el nombre de una oficina de proyecto → "Abrir carpeta" / "Abrir en VS Code".
+ * - Menú de oficina: clic en el piso o el nombre de una oficina de proyecto → "Abrir carpeta" / "Abrir en VS Code" y,
+ *   tanda 5, "Asignar proyecto ▸" / "Dejar vacía" (server/src/personal/ocupacion.ts). Una oficina libre solo asigna.
  * Estado chico con useSyncExternalStore, como filtro.ts.
  */
 import { useSyncExternalStore } from 'react';
 
-import { esSalaComun } from '../../../core/src/salasComunes.js';
+import { esSalaComun, SALA_PRESENTACIONES } from '../../../core/src/salasComunes.js';
 import type { PlacedFurniture } from '../office/types.js';
 import { TILE_SIZE } from '../office/types.js';
 import {
@@ -46,6 +47,11 @@ interface Estado {
   gente: Map<string, number[]>;
   abierta: boolean;
   menu: { sala: string; x: number; y: number } | null;
+  /** Oficinas asignables y su proyecto (null = libre), y los proyectos de Orca que se pueden poner (oficinasEstado). */
+  oficinas: Array<{ sala: string; proyecto: string | null }>;
+  disponibles: string[];
+  /** Panel de la sala de comunicaciones (clic en Presentaciones): interruptor de voz de cada sesión. */
+  comunicaciones: boolean;
   version: number;
 }
 
@@ -55,6 +61,9 @@ const estado: Estado = {
   gente: new Map(),
   abierta: false,
   menu: null,
+  oficinas: [],
+  disponibles: [],
+  comunicaciones: false,
   version: 0,
 };
 const oyentes = new Set<() => void>();
@@ -83,6 +92,39 @@ export function setFilasPizarra(filas: FilaPizarra[], error: string | null = nul
   estado.filas = filas;
   estado.error = error;
   avisar();
+}
+
+/** Mensaje oficinasEstado del servidor. */
+export function setOficinas(
+  oficinas: Array<{ sala: string; proyecto: string | null }>,
+  disponibles: string[],
+): void {
+  estado.oficinas = oficinas;
+  estado.disponibles = disponibles;
+  avisar();
+}
+
+export interface OpcionAsignar {
+  proyecto: string;
+  /** Ya está en otra oficina: al elegirlo se intercambian. */
+  intercambia: boolean;
+}
+
+/** Proyectos para "Asignar proyecto ▸" en la oficina `sala` (sin el que ya tiene). */
+export function opcionesAsignar(
+  sala: string,
+  oficinas: Array<{ sala: string; proyecto: string | null }>,
+  disponibles: string[],
+): OpcionAsignar[] {
+  const actual = oficinas.find((o) => o.sala === sala)?.proyecto ?? null;
+  const ubicados = new Set(oficinas.map((o) => o.proyecto).filter((p): p is string => !!p));
+  return disponibles
+    .filter((p) => p !== actual)
+    .map((p) => ({ proyecto: p, intercambia: ubicados.has(p) }))
+    .sort(
+      (a, b) =>
+        Number(a.intercambia) - Number(b.intercambia) || a.proyecto.localeCompare(b.proyecto),
+    );
 }
 
 /** Pide los pendientes al servidor (con el token de la URL). */
@@ -154,6 +196,7 @@ export function enPizarra(col: number, row: number): boolean {
 export function abrirPizarra(): void {
   estado.abierta = true;
   estado.menu = null;
+  estado.comunicaciones = false;
   avisar();
 }
 
@@ -165,6 +208,20 @@ export function cerrarPizarra(): void {
 export function abrirMenuSala(sala: string, x: number, y: number): void {
   estado.menu = { sala, x, y };
   estado.abierta = false;
+  estado.comunicaciones = false;
+  avisar();
+}
+
+export function abrirComunicaciones(): void {
+  estado.comunicaciones = true;
+  estado.abierta = false;
+  estado.menu = null;
+  avisar();
+}
+
+export function cerrarComunicaciones(): void {
+  if (!estado.comunicaciones) return;
+  estado.comunicaciones = false;
   avisar();
 }
 
@@ -176,7 +233,7 @@ export function cerrarMenuSala(): void {
 
 /**
  * Sala de oficina de proyecto en ese tile (el piso, o el nombre pintado en la pared de arriba), o null si es una sala
- * compartida, "Otros", el pasillo o una pared.
+ * compartida, "Otros", el pasillo o una pared. Las oficinas libres ("Libre 3") sí cuentan: su menú solo asigna.
  */
 export function oficinaEn(
   areaTiles: Array<string | null> | undefined,
@@ -190,8 +247,20 @@ export function oficinaEn(
   return sala;
 }
 
+/** El tile es de la sala de Presentaciones (el piso o su nombre en la pared). */
+export function enComunicaciones(
+  areaTiles: Array<string | null> | undefined,
+  cols: number,
+  col: number,
+  row: number,
+): boolean {
+  const en = (c: number, r: number) => (r >= 0 ? (areaTiles?.[r * cols + c] ?? null) : null);
+  return (en(col, row) ?? en(col, row + 1)) === SALA_PRESENTACIONES;
+}
+
 /**
- * Clic sin agente elegido (OfficeCanvas): pizarra → panel; oficina de proyecto → menú. Devuelve true si lo usó.
+ * Clic sin agente elegido (OfficeCanvas): pizarra → panel; Presentaciones → sala de comunicaciones (tanda 5); oficina
+ * de proyecto → menú. Devuelve true si lo usó.
  */
 export function clicPersonal(
   plano: { cols: number; areaTiles?: Array<string | null> },
@@ -201,6 +270,10 @@ export function clicPersonal(
 ): boolean {
   if (enPizarra(tile.col, tile.row)) {
     abrirPizarra();
+    return true;
+  }
+  if (enComunicaciones(plano.areaTiles, plano.cols, tile.col, tile.row)) {
+    abrirComunicaciones();
     return true;
   }
   const sala = oficinaEn(plano.areaTiles, plano.cols, tile.col, tile.row);

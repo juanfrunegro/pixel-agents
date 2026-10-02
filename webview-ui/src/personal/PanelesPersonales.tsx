@@ -1,17 +1,21 @@
 /**
  * Personal (copia de juanfrunegro), tanda 3: el panel de la pizarra del Brain (pendientes de cada proyecto y quién
- * trabaja ahora) y el menú chico de cada oficina ("Abrir carpeta" / "Abrir en VS Code"). Solo en el navegador.
+ * trabaja ahora) y el menú chico de cada oficina ("Abrir carpeta" / "Abrir en VS Code" y, tanda 5, "Asignar proyecto ▸"
+ * / "Dejar vacía"). Solo en el navegador.
  */
 import { useEffect, useState } from 'react';
 
+import { esOficinaLibre } from '../../../core/src/salasComunes.js';
 import { isBrowserRuntime } from '../runtime.js';
 import { transport } from '../transport/index.js';
 import { COLOR_AVISO, COLOR_SALA_SIN_COLOR, COLOR_VELO } from './colores.js';
 import { nombreDe, usePersonal } from './personal.js';
 import {
   cargarPizarra,
+  cerrarComunicaciones,
   cerrarMenuSala,
   cerrarPizarra,
+  opcionesAsignar,
   REFRESCO_MS,
   usePizarra,
 } from './pizarra.js';
@@ -29,6 +33,7 @@ export function PanelesPersonales({
   const p = usePizarra();
   usePersonal(); // nombres de los agentes
   const [aviso, setAviso] = useState<string | null>(null);
+  const [asignando, setAsignando] = useState(false);
 
   useEffect(() => {
     if (!isBrowserRuntime) return;
@@ -40,7 +45,7 @@ export function PanelesPersonales({
   useEffect(
     () =>
       transport.onMessage((msg) => {
-        if (msg.type !== 'proyectoAbierto') return;
+        if (msg.type !== 'proyectoAbierto' && msg.type !== 'oficinaAsignada') return;
         setAviso(msg.error ?? null);
         if (msg.error) setTimeout(() => setAviso(null), 5000);
       }),
@@ -52,14 +57,31 @@ export function PanelesPersonales({
       if (e.key !== 'Escape') return;
       cerrarPizarra();
       cerrarMenuSala();
+      cerrarComunicaciones();
     };
     window.addEventListener('keydown', tecla);
     return () => window.removeEventListener('keydown', tecla);
   }, []);
 
+  // Cada vez que se abre (o cierra) el menú de una oficina, arranca sin la lista de proyectos desplegada.
+  const menu = p.menu;
+  useEffect(() => setAsignando(false), [menu]);
+
   if (!isBrowserRuntime) return null;
   const color = (sala: string) =>
     colores?.find((a) => a.label === sala)?.color ?? COLOR_SALA_SIN_COLOR;
+  const cerrarMenu = () => {
+    setAsignando(false);
+    cerrarMenuSala();
+  };
+  const asignar = (proyecto: string | null) => {
+    transport.send({ type: 'asignarOficina', sala: p.menu!.sala, proyecto });
+    cerrarMenu();
+  };
+  const libre = !!p.menu && esOficinaLibre(p.menu.sala);
+  const opciones = p.menu ? opcionesAsignar(p.menu.sala, p.oficinas, p.disponibles) : [];
+  const asignable = !!p.menu && p.oficinas.some((o) => o.sala === p.menu!.sala);
+  const estilo = { fontSize: '18px', cursor: 'pointer', textDecoration: 'underline' } as const;
 
   return (
     <>
@@ -68,38 +90,92 @@ export function PanelesPersonales({
           <div
             className="fixed inset-0"
             style={{ zIndex: 69 }}
-            onClick={cerrarMenuSala}
+            onClick={cerrarMenu}
             aria-hidden="true"
           />
           <div
             className="pixel-panel fixed flex flex-col gap-2 px-6 py-4"
             style={{
-              left: Math.min(p.menu.x, window.innerWidth - 230),
-              top: Math.min(p.menu.y, window.innerHeight - 140),
+              left: Math.min(p.menu.x, window.innerWidth - 270),
+              // Abajo de la pantalla el menú crece hacia arriba (si no, la barra de botones lo tapa).
+              ...(p.menu.y > window.innerHeight / 2
+                ? { bottom: Math.max(8, window.innerHeight - p.menu.y) }
+                : { top: Math.max(8, p.menu.y) }),
               zIndex: 70,
-              minWidth: 210,
+              minWidth: 230,
+              maxHeight: 'calc(100vh - 16px)',
+              overflowY: 'auto',
             }}
             role="menu"
             aria-label={`Oficina ${p.menu.sala}`}
             data-testid="menu-oficina"
           >
             <span style={{ fontSize: '20px', fontWeight: 'bold', color: color(p.menu.sala) }}>
-              {p.menu.sala}
+              {libre ? 'Oficina libre' : p.menu.sala}
             </span>
-            {ACCIONES.map((a) => (
+            {!libre &&
+              ACCIONES.map((a) => (
+                <button
+                  key={a.id}
+                  role="menuitem"
+                  className="text-left"
+                  style={estilo}
+                  onClick={() => {
+                    transport.send({ type: 'abrirProyecto', sala: p.menu!.sala, accion: a.id });
+                    cerrarMenu();
+                  }}
+                >
+                  {a.texto}
+                </button>
+              ))}
+            {asignable && !asignando && (
               <button
-                key={a.id}
                 role="menuitem"
                 className="text-left"
-                style={{ fontSize: '18px', cursor: 'pointer', textDecoration: 'underline' }}
-                onClick={() => {
-                  transport.send({ type: 'abrirProyecto', sala: p.menu!.sala, accion: a.id });
-                  cerrarMenuSala();
-                }}
+                style={estilo}
+                onClick={() => setAsignando(true)}
+                data-testid="asignar-proyecto"
               >
-                {a.texto}
+                {libre ? 'Asignar proyecto ▸' : 'Cambiar proyecto ▸'}
               </button>
-            ))}
+            )}
+            {asignable && asignando && (
+              <div className="flex flex-col gap-1" style={{ paddingLeft: 8 }}>
+                {opciones.length === 0 && (
+                  <span style={{ fontSize: '16px', opacity: 0.7 }}>
+                    No hay otros proyectos en Orca.
+                  </span>
+                )}
+                {opciones.map((o) => (
+                  <button
+                    key={o.proyecto}
+                    role="menuitem"
+                    className="text-left"
+                    style={{ ...estilo, color: color(o.proyecto) }}
+                    onClick={() => asignar(o.proyecto)}
+                    title={o.intercambia ? 'Ya tiene oficina: las dos se intercambian' : undefined}
+                  >
+                    {o.proyecto}
+                    {o.intercambia && (
+                      <span style={{ fontSize: '15px', opacity: 0.7, textDecoration: 'none' }}>
+                        {' '}
+                        (intercambia)
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+            {asignable && !libre && (
+              <button
+                role="menuitem"
+                className="text-left"
+                style={{ ...estilo, opacity: 0.8 }}
+                onClick={() => asignar(null)}
+              >
+                Dejar vacía
+              </button>
+            )}
           </div>
         </>
       )}

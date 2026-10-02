@@ -12,10 +12,16 @@ import type { AgentStateStore } from '../agentStateStore.js';
 import type { AgentState } from '../types.js';
 import {
   aplicarSenal,
+  archivosVoz,
+  escribirOverrideVoz,
+  leerOverrideVoz,
+  type OverrideVoz,
   resumen,
   type Senales,
   senalesNuevas,
   sesionDe,
+  vozActiva,
+  vozDicha,
   vozPedida,
 } from './senales.js';
 
@@ -273,6 +279,8 @@ interface InfoSesion {
   voz: boolean;
   /** Cuándo se dijo el último aviso por voz (ms). */
   presento?: number;
+  /** Interruptor puesto desde Pixel (tanda 5): manda sobre el prompt. */
+  vozOverride: OverrideVoz;
 }
 
 const sesiones = new WeakMap<AgentState, InfoSesion>();
@@ -332,7 +340,8 @@ function sumar(info: InfoSesion, r: Registro): boolean {
 function infoDe(agent: AgentState): InfoSesion {
   let info = sesiones.get(agent);
   if (info) return info;
-  info = { costo: 0, vistos: new Set(), senales: senalesNuevas(), voz: false };
+  info = { costo: 0, vistos: new Set(), senales: senalesNuevas(), voz: false, vozOverride: null };
+  if (agent.jsonlFile) info.vozOverride = leerOverrideVoz(sesionDe(agent.jsonlFile));
   sesiones.set(agent, info);
   try {
     for (const linea of fs.readFileSync(agent.jsonlFile, 'utf8').split('\n')) {
@@ -370,7 +379,8 @@ export function mensajeInfo(agentId: number, agent: AgentState): Record<string, 
     senales.errores === 0 &&
     senales.deployDesde === null &&
     !info.voz &&
-    info.presento === undefined
+    info.presento === undefined &&
+    info.vozOverride === null
   )
     return null;
   return {
@@ -383,7 +393,30 @@ export function mensajeInfo(agentId: number, agent: AgentState): Record<string, 
     ...senales,
     voz: info.voz,
     presento: info.presento ?? null,
+    vozOverride: info.vozOverride,
+    vozActiva: vozActiva(info.voz, info.vozOverride),
   };
+}
+
+/**
+ * Interruptor del aviso por voz de una sesión (mensaje setVozSesion, solo con token): escribe el override que leen los
+ * hooks y avisa a los clientes. Devuelve false si el agente no existe o el valor no vale.
+ */
+export function cambiarVozSesion(
+  store: AgentStateStore,
+  agentId: unknown,
+  valor: unknown,
+): boolean {
+  if (typeof agentId !== 'number') return false;
+  const agent = store.get(agentId);
+  if (!agent?.jsonlFile) return false;
+  const sesion = sesionDe(agent.jsonlFile);
+  if (!escribirOverrideVoz(sesion, valor)) return false;
+  const info = infoDe(agent);
+  info.vozOverride = valor as OverrideVoz;
+  const msg = mensajeInfo(agentId, agent);
+  if (msg) store.broadcast(msg as never);
+  return true;
 }
 
 /** Llamado por cada registro del transcript (desde updateContextUsage). */
@@ -412,15 +445,31 @@ const deployVisto = new WeakMap<AgentState, number | null>();
  * de las sesiones con un deploy que venció solo. Lo llama cli.ts cada pocos segundos.
  */
 export function revisarSenales(store: AgentStateStore, ahora = Date.now()): void {
+  let enCarpeta: Set<string> | null = null; // ~/.pixel-agents/voz, leída una vez por vuelta y solo si hace falta
   for (const [id, agent] of store) {
     if (!agent.jsonlFile) continue;
     const info = sesiones.get(agent);
     if (!info) continue;
     let cambio = false;
-    const voz = vozPedida(sesionDe(agent.jsonlFile));
+    const sesion = sesionDe(agent.jsonlFile);
+    const voz = vozPedida(sesion);
+    enCarpeta ??= archivosVoz();
+    const override = enCarpeta.has(`${sesion}.override`) ? leerOverrideVoz(sesion) : null;
+    if (override !== info.vozOverride) {
+      info.vozOverride = override;
+      cambio = true;
+    }
     if (voz !== info.voz) {
-      if (!voz) info.presento = ahora;
+      // La marca desaparece cuando el hook terminó el turno: presenta, salvo que el interruptor estuviera apagado
+      // (el hook borra la marca sin hablar).
+      if (!voz && override !== 'off') info.presento = ahora;
       info.voz = voz;
+      cambio = true;
+    }
+    // Un aviso dicho por el interruptor (sin marca del prompt) solo se ve en <sesión>.dicho.
+    const dicho = enCarpeta.has(`${sesion}.dicho`) ? vozDicha(sesion) : null;
+    if (dicho !== null && dicho > (info.presento ?? 0) + 15_000 && ahora - dicho < 120_000) {
+      info.presento = dicho;
       cambio = true;
     }
     const r = resumen(info.senales, ahora);

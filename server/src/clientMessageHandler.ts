@@ -14,8 +14,15 @@ import {
 import { HUE_SHIFT_MAX_DEG, PALETTE_COUNT } from './constants.js';
 import { readLayoutFromFile, writeLayoutToFile } from './layoutPersistence.js';
 import { abrirProyecto } from './personal/abrir.js';
-import { recargarOficina } from './personal/oficina.js';
-import { guardarNombre, mensajeNombres } from './personal/personal.js';
+import { asignarOficina } from './personal/ocupacion.js';
+import {
+  mensajeOficinas,
+  ocupacionActual,
+  proyectosDisponibles,
+  recargarOficina,
+} from './personal/oficina.js';
+import { cambiarVozSesion, guardarNombre, mensajeNombres } from './personal/personal.js';
+import { mensajeSkins } from './personal/skins.js';
 import type { ConsentEffects } from './providers/hook/consentExecutor.js';
 import { applyConsentChoice } from './providers/hook/consentExecutor.js';
 import { hooksConsentRequest } from './providers/hook/consentGate.js';
@@ -305,6 +312,35 @@ export function handleClientMessage(
       break;
     }
 
+    case 'asignarOficina': {
+      // Menú de una oficina: "Asignar proyecto" o "Dejar vacía". Solo proyectos de Orca y oficinas que existen; se
+      // regenera el plano con las oficinas en su lugar y los clientes recargan la página (sin reiniciar el server).
+      if (!ctx.privileged) break;
+      try {
+        if (!cache?.defaultLayout) throw new Error('falta el plano original');
+        const disponibles = proyectosDisponibles();
+        const r = asignarOficina(ocupacionActual(disponibles), msg.sala, msg.proyecto, disponibles);
+        if ('error' in r) {
+          send({ type: 'oficinaAsignada', error: r.error });
+          break;
+        }
+        const hecho = recargarOficina(cache.defaultLayout, r.ocupacion);
+        console.log(`[Pixel Agents] Oficinas: ${hecho.salas.join(', ')}.`);
+        store.broadcast({ type: 'oficinaRecargada', ...hecho });
+      } catch (err) {
+        console.error('[Pixel Agents] No se pudo asignar la oficina:', err);
+        send({ type: 'oficinaAsignada', error: 'No se pudo cambiar la oficina.' });
+      }
+      break;
+    }
+
+    case 'setVozSesion': {
+      // Interruptor del aviso por voz (sala de comunicaciones o ficha). Solo con token; el servidor valida la sesión.
+      if (!ctx.privileged) break;
+      cambiarVozSesion(store, msg.id, msg.valor);
+      break;
+    }
+
     case 'abrirProyecto': {
       // Clic en una oficina: abrir su carpeta o VS Code. La ruta sale de Orca, nunca del cliente.
       if (!ctx.privileged) break;
@@ -419,6 +455,8 @@ function handleWebviewReady(send: WsSend, ctx: ClientMessageContext): void {
     if (cache.characters) {
       send({ type: 'characterSpritesLoaded', characters: cache.characters.characters });
     }
+    const skins = mensajeSkins(); // personal: skins de Marvel
+    if (skins) send(skins as never);
     if (cache.pets) {
       send({
         type: 'petSpritesLoaded',
@@ -563,5 +601,6 @@ function handleWebviewReady(send: WsSend, ctx: ClientMessageContext): void {
   // exist once the layout flush creates them. Without this a reconnecting
   // client shows bare characters until each agent takes another turn.
   send(mensajeNombres()); // personal: nombres de fantasía antes de la actividad
+  if (ctx.privileged) send(mensajeOficinas()); // personal: qué proyecto ocupa cada oficina (menú de la oficina)
   resendAgentActivity(send, store);
 }

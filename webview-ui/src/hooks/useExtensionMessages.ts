@@ -21,6 +21,8 @@ import type { OfficeLayout, ToolActivity } from '../office/types.js';
 import { setWallSprites } from '../office/wallTiles.js';
 import { alLanzarSub, alTerminarSub } from '../personal/burbujas.js';
 import { alMensaje, registrarSub } from '../personal/personal.js';
+import { setOficinas } from '../personal/pizarra.js';
+import { setSkins } from '../personal/skins.js';
 import { isBrowserRuntime, isE2E } from '../runtime.js';
 import { transport } from '../transport/index.js';
 
@@ -639,6 +641,10 @@ export function useExtensionMessages(
           }>,
           petNames,
         );
+      } else if (msg.type === 'skinsPersonalesLoaded') {
+        setSkins(msg.skins); // personal: skins de Marvel (solo estética)
+      } else if (msg.type === 'oficinasEstado') {
+        setOficinas(msg.lugares, msg.disponibles); // personal: qué proyecto ocupa cada oficina (menú de la oficina)
       } else if (msg.type === 'floorTilesLoaded') {
         const sprites = msg.sprites as string[][][];
         console.log(`[Webview] Received ${sprites.length} floor tile patterns`);

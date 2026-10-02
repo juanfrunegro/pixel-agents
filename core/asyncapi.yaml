@@ -123,6 +123,9 @@ components:
         - $ref: '#/components/schemas/AgentNamesLoaded'
         - $ref: '#/components/schemas/OficinaRecargada'
         - $ref: '#/components/schemas/ProyectoAbierto'
+        - $ref: '#/components/schemas/OficinasEstado'
+        - $ref: '#/components/schemas/OficinaAsignada'
+        - $ref: '#/components/schemas/SkinsPersonalesLoaded'
       discriminator: type
 
     ClientMessage:
@@ -154,6 +157,8 @@ components:
         - $ref: '#/components/schemas/ShutdownServer'
         - $ref: '#/components/schemas/RecargarOficina'
         - $ref: '#/components/schemas/AbrirProyecto'
+        - $ref: '#/components/schemas/AsignarOficina'
+        - $ref: '#/components/schemas/SetVozSesion'
       discriminator: type
 
     # ── Personal (copia de juanfrunegro) ──────────────────────────
@@ -196,6 +201,14 @@ components:
         presento:
           description: Cuándo se dijo su último aviso por voz (ms epoch); null = nunca.
           type: [number, 'null']
+        vozOverride:
+          description: >-
+            Interruptor del aviso por voz puesto desde Pixel (sala de comunicaciones o ficha): on = avisa aunque no lo
+            haya pedido el prompt, off = no avisa aunque lo haya pedido; null = sigue al prompt.
+          type: [string, 'null']
+        vozActiva:
+          description: Si al terminar el turno va a avisar por voz (prompt + interruptor; el interruptor manda).
+          type: boolean
 
     AgentNamesLoaded:
       description: Nombres de fantasía (~/.claude/agents/nombres.json).
@@ -280,6 +293,90 @@ components:
           type: string
         accion:
           type: string
+        error:
+          type: string
+
+    AsignarOficina:
+      description: >-
+        Menú de una oficina: poner un proyecto de Orca en ella (si estaba en otra, se intercambian) o dejarla libre
+        (proyecto null). La oficina va por el nombre que muestra el plano ("Chaina", "Libre 3"). Solo con token.
+      type: object
+      additionalProperties: false
+      required: [type, sala, proyecto]
+      properties:
+        type:
+          const: asignarOficina
+        sala:
+          type: string
+        proyecto:
+          type: [string, 'null']
+
+    SetVozSesion:
+      description: >-
+        Interruptor del aviso por voz de una sesión (sala de comunicaciones o ficha): on, off o null (seguir al
+        prompt). El servidor escribe ~/.pixel-agents/voz/<sesión>.override, que leen los hooks de voz. Solo con token.
+      type: object
+      additionalProperties: false
+      required: [type, id, valor]
+      properties:
+        type:
+          const: setVozSesion
+        id:
+          type: integer
+        valor:
+          type: [string, 'null']
+
+    OficinasEstado:
+      description: Qué proyecto ocupa cada oficina asignable (null = libre) y qué proyectos de Orca se pueden asignar.
+      type: object
+      additionalProperties: false
+      required: [type, lugares, disponibles]
+      properties:
+        type:
+          const: oficinasEstado
+        lugares:
+          type: array
+          items:
+            $ref: '#/components/schemas/LugarOficina'
+        disponibles:
+          type: array
+          items:
+            type: string
+
+    SkinsPersonalesLoaded:
+      description: >-
+        Skins de Marvel (solo estética): un agente que se llama como uno de estos personajes se dibuja con su skin. Mismo
+        formato que characterSpritesLoaded, por id (hulk, spiderman, ironman, thor, deadpool).
+      type: object
+      additionalProperties: false
+      required: [type, skins]
+      properties:
+        type:
+          const: skinsPersonalesLoaded
+        skins:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/CharacterSpriteSet'
+
+    LugarOficina:
+      description: Una oficina asignable del plano ("Chaina", "Libre 3") y su proyecto (null = libre).
+      type: object
+      additionalProperties: false
+      required: [sala, proyecto]
+      properties:
+        sala:
+          type: string
+        proyecto:
+          type: [string, 'null']
+
+    OficinaAsignada:
+      description: Error al asignar una oficina (si sale bien llega oficinaRecargada y los clientes recargan).
+      type: object
+      additionalProperties: false
+      required: [type, error]
+      properties:
+        type:
+          const: oficinaAsignada
         error:
           type: string
 

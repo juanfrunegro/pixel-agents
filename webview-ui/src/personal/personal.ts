@@ -5,6 +5,7 @@
 import { useSyncExternalStore } from 'react';
 
 import { aspectoDePersona, personaDe } from '../../../core/src/aspectoPersonal.js';
+import { NOMBRES_CON_SKIN } from '../../../core/src/skinsMarvel.js';
 import { COLOR_FABLE, COLOR_HAIKU, COLOR_OPUS, COLOR_SIN_MODELO, COLOR_SONNET } from './colores.js';
 
 export interface Nombres {
@@ -34,6 +35,10 @@ interface Estado {
       deployDesde?: number | null;
       voz?: boolean;
       presento?: number | null;
+      /** Interruptor puesto desde Pixel (tanda 5): on/off, o null = seguir al prompt. */
+      vozOverride?: 'on' | 'off' | null;
+      /** Va a avisar por voz al terminar el turno (el interruptor manda sobre el prompt). */
+      vozActiva?: boolean;
     }
   >;
   metaPorTool: Map<string, MetaSub>;
@@ -140,6 +145,8 @@ export function alMensaje(msg: any): void {
       deployDesde: typeof msg.deployDesde === 'number' ? msg.deployDesde : null,
       voz: msg.voz === true,
       presento: typeof msg.presento === 'number' ? msg.presento : null,
+      vozOverride: msg.vozOverride === 'on' || msg.vozOverride === 'off' ? msg.vozOverride : null,
+      vozActiva: typeof msg.vozActiva === 'boolean' ? msg.vozActiva : msg.voz === true,
     });
     avisar();
   } else if (msg?.type === 'agentClosed' && typeof msg.id === 'number') {
@@ -186,6 +193,8 @@ export interface Paso {
 /** Cuántos pasos se guardan por personaje (los últimos). */
 export const HISTORIAL_MAX = 12;
 const historial = new Map<number, Paso[]>();
+/** Nombre de cada agente descartable, fijado la primera vez que se pide (tanda 5: los que tienen skin, primero). */
+const nombreDescartable = new Map<number, string>();
 
 export function anotarHistorial(id: number, texto: string, ahora = Date.now()): void {
   const limpio = texto.trim();
@@ -216,6 +225,7 @@ let faltabanAntes = new Set<number>();
 
 function olvidarPersonaje(id: number): void {
   historial.delete(id);
+  nombreDescartable.delete(id);
   estado.subs.delete(id);
   estado.status.delete(id);
   estado.actividad.delete(id);
@@ -232,7 +242,14 @@ export function podarPersonal(vivo: (id: number) => boolean, ahora = Date.now())
   // pueden llegar antes que su personaje.
   const faltan = new Set<number>();
   const falta = (id: number) => !vivo(id) && !estado.info.has(id);
-  for (const m of [estado.subs, estado.status, estado.actividad, estado.inicio, historial]) {
+  for (const m of [
+    estado.subs,
+    estado.status,
+    estado.actividad,
+    estado.inicio,
+    historial,
+    nombreDescartable,
+  ]) {
     for (const id of m.keys()) if (falta(id)) faltan.add(id);
   }
   for (const id of faltan) if (faltabanAntes.has(id)) olvidarPersonaje(id);
@@ -255,6 +272,7 @@ export function _tamanosPersonal(): Record<string, number> {
     inicio: estado.inicio.size,
     metaPorTool: estado.metaPorTool.size,
     historial: historial.size,
+    nombres: nombreDescartable.size,
   };
 }
 
@@ -286,6 +304,20 @@ export function claveDe(charId: number): string {
   return metaDe(charId)?.t ?? 'ceo';
 }
 
+/**
+ * Nombre de un descartable: primero los cinco con skin de Marvel (Hulk, Spider-Man…) que estén en la lista y no los
+ * tenga ya otro descartable vivo; si están todos ocupados, uno de la lista según la herramienta, evitando repetir.
+ */
+export function elegirDescartable(lista: string[], usados: Set<string>, semilla: number): string {
+  const conSkin = NOMBRES_CON_SKIN.find((n) => lista.includes(n) && !usados.has(n));
+  if (conSkin) return conSkin;
+  for (let k = 0; k < lista.length; k++) {
+    const n = lista[(semilla + k) % lista.length];
+    if (!usados.has(n)) return n;
+  }
+  return lista[semilla % lista.length];
+}
+
 /** Nombre de fantasía: CEO para sesiones, el de nombres.json para agentes definidos, Marvel para descartables. */
 export function nombreDe(charId: number): string {
   const s = estado.subs.get(charId);
@@ -293,7 +325,14 @@ export function nombreDe(charId: number): string {
   const tipo = estado.metaPorTool.get(s.toolId)?.t;
   if (tipo && estado.nombres.agentes[tipo]) return estado.nombres.agentes[tipo];
   const lista = estado.nombres.descartables;
-  return lista.length ? lista[hash(s.toolId) % lista.length] : tipo || 'Sub-agente';
+  if (!lista.length) return tipo || 'Sub-agente';
+  const ya = nombreDescartable.get(charId);
+  if (ya) return ya;
+  const usados = new Set<string>();
+  for (const [id, n] of nombreDescartable) if (id !== charId && esDescartable(id)) usados.add(n);
+  const n = elegirDescartable(lista, usados, hash(s.toolId));
+  nombreDescartable.set(charId, n);
+  return n;
 }
 
 export function esDescartable(charId: number): boolean {
@@ -383,9 +422,25 @@ export function deployDe(charId: number, ahora = Date.now()): boolean {
   return typeof d === 'number' && ahora - d < DEPLOY_MAX_MS;
 }
 
-/** La sesión pidió el aviso por voz y todavía no se dijo. */
+/**
+ * La sesión va a avisar por voz al terminar el turno: lo pidió en el prompt y no lo apagaste, o lo prendiste vos desde
+ * la sala de comunicaciones o la ficha (tanda 5: el interruptor manda sobre el prompt).
+ */
 export function vozDe(charId: number): boolean {
+  if (estado.subs.has(charId)) return false;
+  const i = estado.info.get(charId);
+  return i?.vozActiva ?? i?.voz === true;
+}
+
+/** La sesión pidió el aviso por voz en el prompt (marca del hook), sin mirar el interruptor. */
+export function vozPedidaDe(charId: number): boolean {
   return !estado.subs.has(charId) && estado.info.get(charId)?.voz === true;
+}
+
+/** Interruptor puesto desde Pixel para esta sesión, o null si sigue al prompt. */
+export function vozOverrideDe(charId: number): 'on' | 'off' | null {
+  if (estado.subs.has(charId)) return null;
+  return estado.info.get(charId)?.vozOverride ?? null;
 }
 
 /** Se acaba de decir el aviso por voz de esta sesión: está presentando. */

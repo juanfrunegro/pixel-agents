@@ -54,14 +54,24 @@ export function PanelAtencion({ officeState }: { officeState: OfficeState }) {
   };
 
   return (
+    // Una tira arriba al centro, en la franja oscura sobre la oficina: así no tapa las tarjetas de los agentes de las
+    // oficinas de las esquinas (antes iba arriba a la izquierda y tapaba la del agente de arriba en Chaina).
     <div
-      className="pixel-panel absolute flex flex-col gap-2 px-8 py-6"
-      style={{ left: 60, top: 10, zIndex: 55, maxWidth: 320 }}
+      className="pixel-panel absolute flex items-center gap-8 px-8 py-2"
+      style={{
+        left: '50%',
+        top: 6,
+        transform: 'translateX(-50%)',
+        zIndex: 55,
+        maxWidth: 'calc(100vw - 140px)',
+        overflow: 'hidden',
+        whiteSpace: 'nowrap',
+      }}
       data-testid="atencion"
       onClick={(e) => e.stopPropagation()}
     >
       <span style={{ fontSize: '16px', opacity: 0.65 }}>Mirá</span>
-      {r.items.slice(0, 6).map((it) => {
+      {r.items.slice(0, 4).map((it) => {
         const ch = officeState.characters.get(it.id);
         const proyecto = ch?.folderName ? ` · ${ch.folderName}` : '';
         return (
@@ -80,8 +90,8 @@ export function PanelAtencion({ officeState }: { officeState: OfficeState }) {
           </button>
         );
       })}
-      {r.items.length > 6 && (
-        <span style={{ fontSize: '16px', opacity: 0.65 }}>y {r.items.length - 6} más</span>
+      {r.items.length > 4 && (
+        <span style={{ fontSize: '16px', opacity: 0.65 }}>y {r.items.length - 4} más</span>
       )}
     </div>
   );

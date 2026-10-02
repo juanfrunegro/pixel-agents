@@ -140,6 +140,98 @@ export function sesionDe(jsonlFile: string): string {
     .slice(0, 80);
 }
 
+/**
+ * Interruptor del aviso por voz puesto desde Pixel (tanda 5): ~/.pixel-agents/voz/<sesión>.override con "on" u "off".
+ * Lo leen los hooks de voz al terminar el turno (Windows: ~/.claude/hooks/voice_notify.py; WSL: voz_wsl.py) y manda
+ * sobre lo que pidió el prompt. Sin archivo = seguir al prompt. Al decir el aviso, los hooks tocan <sesión>.dicho.
+ */
+export type OverrideVoz = 'on' | 'off' | null;
+
+export function carpetaOverrideVoz(): string {
+  return path.join(os.homedir() || '.', '.pixel-agents', 'voz');
+}
+
+/** Un session_id válido (el nombre del .jsonl): solo letras, números, _ y -, para que no se salga de la carpeta. */
+export function sesionValida(sesion: unknown): sesion is string {
+  return typeof sesion === 'string' && /^[\w-]{1,80}$/.test(sesion);
+}
+
+export function leerOverrideVoz(sesion: string, carpeta = carpetaOverrideVoz()): OverrideVoz {
+  if (!sesionValida(sesion)) return null;
+  try {
+    const v = fs
+      .readFileSync(path.join(carpeta, `${sesion}.override`), 'utf8')
+      .trim()
+      .toLowerCase();
+    return v === 'on' || v === 'off' ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Escribe (o borra, con null) el interruptor. false si la sesión o el valor no son válidos. */
+export function escribirOverrideVoz(
+  sesion: unknown,
+  valor: unknown,
+  carpeta = carpetaOverrideVoz(),
+): boolean {
+  if (!sesionValida(sesion) || (valor !== 'on' && valor !== 'off' && valor !== null)) return false;
+  const archivo = path.join(carpeta, `${sesion}.override`);
+  if (valor === null) {
+    fs.rmSync(archivo, { force: true });
+    return true;
+  }
+  fs.mkdirSync(carpeta, { recursive: true });
+  fs.writeFileSync(archivo, valor, 'utf8');
+  return true;
+}
+
+/** Cuándo dijo un hook el último aviso de esa sesión (mtime de <sesión>.dicho, ms), o null. */
+export function vozDicha(sesion: string, carpeta = carpetaOverrideVoz()): number | null {
+  if (!sesionValida(sesion)) return null;
+  try {
+    return fs.statSync(path.join(carpeta, `${sesion}.dicho`)).mtimeMs;
+  } catch {
+    return null;
+  }
+}
+
+/** Borra interruptores y marcas de "dicho" de sesiones viejas (más de `dias` sin tocar). Lo llama cli.ts al arrancar. */
+export function limpiarVozVieja(
+  dias = 3,
+  carpeta = carpetaOverrideVoz(),
+  ahora = Date.now(),
+): number {
+  let n = 0;
+  try {
+    for (const f of fs.readdirSync(carpeta)) {
+      if (!/\.(override|dicho)$/.test(f)) continue;
+      const archivo = path.join(carpeta, f);
+      if (ahora - fs.statSync(archivo).mtimeMs > dias * 86_400_000) {
+        fs.rmSync(archivo, { force: true });
+        n++;
+      }
+    }
+  } catch {
+    /* sin carpeta */
+  }
+  return n;
+}
+
+/** Archivos de la carpeta del interruptor (una lectura por vuelta de revisarSenales, en vez de una por sesión). */
+export function archivosVoz(carpeta = carpetaOverrideVoz()): Set<string> {
+  try {
+    return new Set(fs.readdirSync(carpeta));
+  } catch {
+    return new Set();
+  }
+}
+
+/** Si al terminar el turno va a avisar: el interruptor manda; sin interruptor, lo que pidió el prompt. */
+export function vozActiva(pedidaEnPrompt: boolean, override: OverrideVoz): boolean {
+  return override === 'on' || (override !== 'off' && pedidaEnPrompt);
+}
+
 export function vozPedida(sesion: string, carpetas = carpetasVoz()): boolean {
   if (!sesion) return false;
   return carpetas.some((c) => {

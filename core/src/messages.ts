@@ -42,7 +42,10 @@ export type ServerMessage =
   | AgentInfo
   | AgentNamesLoaded
   | OficinaRecargada
-  | ProyectoAbierto;
+  | ProyectoAbierto
+  | OficinasEstado
+  | OficinaAsignada
+  | SkinsPersonalesLoaded;
 
 export type ClientMessage =
   | WebviewReady
@@ -70,7 +73,9 @@ export type ClientMessage =
   | RenameAgent
   | ShutdownServer
   | RecargarOficina
-  | AbrirProyecto;
+  | AbrirProyecto
+  | AsignarOficina
+  | SetVozSesion;
 
 export interface ProviderCapabilities {
   type: 'providerCapabilities';
@@ -335,6 +340,8 @@ export interface AgentInfo {
   deployDesde?: number | null;
   voz?: boolean;
   presento?: number | null;
+  vozOverride?: string | null;
+  vozActiva?: boolean;
 }
 
 export interface AgentNamesLoaded {
@@ -357,6 +364,27 @@ export interface ProyectoAbierto {
   sala: string;
   accion: string;
   error?: string;
+}
+
+export interface OficinasEstado {
+  type: 'oficinasEstado';
+  lugares: LugarOficina[];
+  disponibles: string[];
+}
+
+export interface LugarOficina {
+  sala: string;
+  proyecto: string | null;
+}
+
+export interface OficinaAsignada {
+  type: 'oficinaAsignada';
+  error: string;
+}
+
+export interface SkinsPersonalesLoaded {
+  type: 'skinsPersonalesLoaded';
+  skins: Record<string, CharacterSpriteSet>;
 }
 
 export interface WebviewReady {
@@ -491,7 +519,19 @@ export interface RecargarOficina {
 export interface AbrirProyecto {
   type: 'abrirProyecto';
   sala: string;
-  accion: AnonymousSchema_272;
+  accion: AnonymousSchema_284;
 }
 
-export type AnonymousSchema_272 = 'carpeta' | 'vscode';
+export type AnonymousSchema_284 = 'carpeta' | 'vscode';
+
+export interface AsignarOficina {
+  type: 'asignarOficina';
+  sala: string;
+  proyecto: string | null;
+}
+
+export interface SetVozSesion {
+  type: 'setVozSesion';
+  id: number;
+  valor: string | null;
+}

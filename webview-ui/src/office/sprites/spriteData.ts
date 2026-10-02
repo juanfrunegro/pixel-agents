@@ -31,7 +31,7 @@ export const BUBBLE_HEART_SPRITE: SpriteData = resolveBubbleSprite(bubblePetData
 // Loaded character sprites (from PNG assets)
 // ════════════════════════════════════════════════════════════════
 
-interface LoadedCharacterData {
+export interface LoadedCharacterData {
   down: SpriteData[];
   up: SpriteData[];
   right: SpriteData[];
@@ -115,6 +115,34 @@ function emptySprite(w: number, h: number): SpriteData {
   return rows;
 }
 
+/** Frames of one loaded character sheet → walk/typing/reading per direction (left = mirrored right). */
+export function charSpritesFrom(char: LoadedCharacterData): CharacterSprites {
+  const d = char.down;
+  const u = char.up;
+  const rt = char.right;
+  const flip = flipSpriteHorizontal;
+  return {
+    walk: {
+      [Dir.DOWN]: [d[0], d[1], d[2], d[1]],
+      [Dir.UP]: [u[0], u[1], u[2], u[1]],
+      [Dir.RIGHT]: [rt[0], rt[1], rt[2], rt[1]],
+      [Dir.LEFT]: [flip(rt[0]), flip(rt[1]), flip(rt[2]), flip(rt[1])],
+    },
+    typing: {
+      [Dir.DOWN]: [d[3], d[4]],
+      [Dir.UP]: [u[3], u[4]],
+      [Dir.RIGHT]: [rt[3], rt[4]],
+      [Dir.LEFT]: [flip(rt[3]), flip(rt[4])],
+    },
+    reading: {
+      [Dir.DOWN]: [d[5], d[6]],
+      [Dir.UP]: [u[5], u[6]],
+      [Dir.RIGHT]: [rt[5], rt[6]],
+      [Dir.LEFT]: [flip(rt[5]), flip(rt[6])],
+    },
+  };
+}
+
 export function getCharacterSprites(paletteIndex: number, hueShift = 0): CharacterSprites {
   const cacheKey = `${paletteIndex}:${hueShift}`;
   const cached = spriteCache.get(cacheKey);
@@ -124,32 +152,7 @@ export function getCharacterSprites(paletteIndex: number, hueShift = 0): Charact
 
   if (loadedCharacters) {
     // Use pre-colored character sprites directly (no palette swapping)
-    const char = loadedCharacters[paletteIndex % loadedCharacters.length];
-    const d = char.down;
-    const u = char.up;
-    const rt = char.right;
-    const flip = flipSpriteHorizontal;
-
-    sprites = {
-      walk: {
-        [Dir.DOWN]: [d[0], d[1], d[2], d[1]],
-        [Dir.UP]: [u[0], u[1], u[2], u[1]],
-        [Dir.RIGHT]: [rt[0], rt[1], rt[2], rt[1]],
-        [Dir.LEFT]: [flip(rt[0]), flip(rt[1]), flip(rt[2]), flip(rt[1])],
-      },
-      typing: {
-        [Dir.DOWN]: [d[3], d[4]],
-        [Dir.UP]: [u[3], u[4]],
-        [Dir.RIGHT]: [rt[3], rt[4]],
-        [Dir.LEFT]: [flip(rt[3]), flip(rt[4])],
-      },
-      reading: {
-        [Dir.DOWN]: [d[5], d[6]],
-        [Dir.UP]: [u[5], u[6]],
-        [Dir.RIGHT]: [rt[5], rt[6]],
-        [Dir.LEFT]: [flip(rt[5]), flip(rt[6])],
-      },
-    };
+    sprites = charSpritesFrom(loadedCharacters[paletteIndex % loadedCharacters.length]);
   } else {
     // Fallback: return transparent placeholder sprites (16×32)
     const e = emptySprite(16, 32);

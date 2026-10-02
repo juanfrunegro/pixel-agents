@@ -30,6 +30,8 @@ import { FileStateAdapter } from './fileStateAdapter.js';
 import { setFolderNameResolver } from './fileWatcher.js';
 import { cargarReglasOrca } from './personal/oficina.js';
 import { proyectoDe, revisarSenales } from './personal/personal.js';
+import { limpiarVozVieja } from './personal/senales.js';
+import { cargarSkins } from './personal/skins.js';
 import { claudeProvider, copyHookScript, hookProviderById } from './providers/index.js';
 import { PixelAgentsServer } from './server.js';
 
@@ -150,6 +152,8 @@ async function main(): Promise<void> {
     setFolderNameResolver(proyectoDe); // personal: cada agente cae en el área de su proyecto (Orca y WSL incluidos)
     cargarReglasOrca(); // personal: proyectos nuevos de Orca → su sala
     setInterval(() => revisarSenales(store), 2000).unref(); // personal: aviso por voz y deploys vencidos
+    limpiarVozVieja(); // personal: interruptores de voz de sesiones de hace días
+    cargarSkins(distRoot); // personal: skins de Marvel (solo estética)
 
     // Wire hook events: HTTP POST -> runtime -> hookEventHandler -> agents
     server.onHookEvent((providerId, event) => {

@@ -33,3 +33,7 @@ export const COLOR_PIZARRA_GENTE = '#ffd34d';
 export const COLOR_AVISO = '#f59e0b';
 export const COLOR_SALA_SIN_COLOR = '#9aa0ab';
 export const COLOR_VELO = 'rgba(0, 0, 0, 0.35)';
+/** Personal (tanda 5): interruptor del aviso por voz (sala de comunicaciones y ficha). */
+export const COLOR_VOZ_ON = '#22c55e';
+export const COLOR_VOZ_OFF = '#6b7280';
+export const COLOR_PERILLA = '#f8fafc';
