@@ -16,6 +16,7 @@ import {
   PET_HIT_HEIGHT,
   WAITING_BUBBLE_DURATION_SEC,
 } from '../../constants.js';
+import { tickPersonal } from '../../personal/ambiente.js';
 import { getAnimationFrames, getCatalogEntry, getOnStateType } from '../layout/furnitureCatalog.js';
 import {
   createDefaultLayout,
@@ -1127,6 +1128,7 @@ export class OfficeState {
     for (const id of toDelete) {
       this.characters.delete(id);
     }
+    tickPersonal(this); // personal: dormido sin tokens (personal/ambiente.ts)
 
     // ── Pet FSM ────────────────────────────────────────────────
     for (const pet of this.pets) {

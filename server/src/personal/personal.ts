@@ -257,14 +257,50 @@ interface InfoSesion {
   modelo?: string;
   costo: number;
   vistos: Set<string>;
+  /** Se quedó sin tokens: hasta cuándo (segundos epoch; 0 = sin hora de vuelta). undefined = despierto. */
+  dormidoHasta?: number;
 }
 
 const sesiones = new WeakMap<AgentState, InfoSesion>();
 
 interface Registro {
+  type?: string;
   uuid?: string;
   requestId?: string;
+  error?: string;
+  isApiErrorMessage?: boolean;
+  quotaLimits?: { status?: string; resetsAt?: number };
   message?: { id?: string; model?: string; usage?: Uso };
+}
+
+/**
+ * Dormido o despierto según un registro del transcript. Claude Code escribe un mensaje sintético con
+ * `error: 'rate_limit'` ("You've hit your session limit") cuando se acaba la cuota; cualquier respuesta real del modelo
+ * después lo despierta. Devuelve null si el registro no dice nada (texto de herramientas incluido: no se mira el texto).
+ */
+export function limiteDe(
+  r: Registro,
+): { dormido: true; hasta: number } | { dormido: false } | null {
+  if (r.type !== 'assistant') return null;
+  if (r.error === 'rate_limit' || (r.isApiErrorMessage && r.quotaLimits?.status === 'rejected')) {
+    const hasta = r.quotaLimits?.resetsAt;
+    return { dormido: true, hasta: typeof hasta === 'number' && hasta > 0 ? hasta : 0 };
+  }
+  if (r.message?.model && r.message.model !== '<synthetic>') return { dormido: false };
+  return null;
+}
+
+function aplicarLimite(info: InfoSesion, r: Registro): boolean {
+  const l = limiteDe(r);
+  if (!l) return false;
+  const antes = info.dormidoHasta;
+  info.dormidoHasta = l.dormido ? l.hasta : undefined;
+  return antes !== info.dormidoHasta;
+}
+
+/** Sesión de WSL leída desde Windows (\\wsl.localhost\… o \\wsl$\…): otra cuenta (Max). */
+export function esDeWsl(archivo: string | undefined): boolean {
+  return !!archivo && /^[\\/]{2}wsl(\.localhost|\$)[\\/]/i.test(archivo);
 }
 
 function sumar(info: InfoSesion, r: Registro): boolean {
@@ -286,9 +322,11 @@ function infoDe(agent: AgentState): InfoSesion {
   sesiones.set(agent, info);
   try {
     for (const linea of fs.readFileSync(agent.jsonlFile, 'utf8').split('\n')) {
-      if (!linea.includes('"usage"')) continue;
+      if (!linea.includes('"usage"') && !linea.includes('"rate_limit"')) continue;
       try {
-        sumar(info, JSON.parse(linea) as Registro);
+        const r = JSON.parse(linea) as Registro;
+        sumar(info, r);
+        aplicarLimite(info, r);
       } catch {
         /* línea a medio escribir */
       }
@@ -301,12 +339,15 @@ function infoDe(agent: AgentState): InfoSesion {
 
 export function mensajeInfo(agentId: number, agent: AgentState): Record<string, unknown> | null {
   const info = infoDe(agent);
-  if (!info.modelo && info.costo === 0) return null;
+  const wsl = esDeWsl(agent.jsonlFile);
+  if (!info.modelo && info.costo === 0 && !wsl && info.dormidoHasta === undefined) return null;
   return {
     type: 'agentInfo',
     id: agentId,
     model: info.modelo,
     costUsd: Math.round(info.costo * 10000) / 10000,
+    dormidoHasta: info.dormidoHasta ?? null,
+    wsl,
   };
 }
 
@@ -319,7 +360,9 @@ export function registrarUso(
 ): void {
   const primera = !sesiones.has(agent);
   const info = infoDe(agent);
-  if (sumar(info, record as Registro) || primera) {
+  const sumo = sumar(info, record as Registro);
+  const cambioLimite = aplicarLimite(info, record as Registro);
+  if (sumo || cambioLimite || primera) {
     const msg = mensajeInfo(agentId, agent);
     if (msg) store.broadcast(msg as never);
   }

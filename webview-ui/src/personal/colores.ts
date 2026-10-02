@@ -4,3 +4,6 @@ export const COLOR_SONNET = '#3b9bd6';
 export const COLOR_FABLE = '#a463e0';
 export const COLOR_HAIKU = '#4cb36a';
 export const COLOR_SIN_MODELO = '#9aa0ab';
+
+/** Personal: colores de los dibujos propios encima de los personajes (Zzz, diálogo, gafete WSL). */
+export const COLOR_ZZZ = '#9FB7FF';

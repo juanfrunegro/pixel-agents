@@ -11,6 +11,8 @@ import {
   claveDe,
   colorModelo,
   costoDe,
+  despiertaA,
+  dormidoDe,
   esDescartable,
   etiquetaModelo,
   inicioDe,
@@ -72,8 +74,14 @@ export function FichaAgente({ officeState, subagentCharacters }: Props) {
   const clave = claveDe(id);
   const interno = ch.agentName ? 'compañero de equipo' : meta ? meta.t : 'sesión principal (CEO)';
   const proyecto = ch.folderName || chPadre?.folderName || '—';
-  const estado =
-    ch.bubbleType === 'permission' ? 'espera tu permiso' : ch.isActive ? 'trabajando' : 'en pausa';
+  const vuelve = despiertaA(id);
+  const estado = dormidoDe(id)
+    ? `dormido, sin tokens${vuelve ? ` (vuelve ${vuelve.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })})` : ''}`
+    : ch.bubbleType === 'permission'
+      ? 'espera tu permiso'
+      : ch.isActive
+        ? 'trabajando'
+        : 'en pausa';
 
   const guardar = () => {
     transport.send({ type: 'renameAgent', clave, nombre: borrador });

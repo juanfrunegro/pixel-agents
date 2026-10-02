@@ -22,7 +22,10 @@ export interface MetaSub {
 
 interface Estado {
   nombres: Nombres;
-  info: Map<number, { model?: string; costUsd?: number }>;
+  info: Map<
+    number,
+    { model?: string; costUsd?: number; dormidoHasta?: number | null; wsl?: boolean }
+  >;
   metaPorTool: Map<string, MetaSub>;
   subs: Map<number, { padre: number; toolId: string }>;
   inicio: Map<number, number>;
@@ -77,7 +80,12 @@ export function alMensaje(msg: any): void {
     };
     avisar();
   } else if (msg?.type === 'agentInfo') {
-    estado.info.set(msg.id, { model: msg.model, costUsd: msg.costUsd });
+    estado.info.set(msg.id, {
+      model: msg.model,
+      costUsd: msg.costUsd,
+      dormidoHasta: typeof msg.dormidoHasta === 'number' ? msg.dormidoHasta : null,
+      wsl: msg.wsl === true,
+    });
     avisar();
   } else if (msg?.type === 'agentCreated' || msg?.type === 'existingAgents') {
     const ids: number[] = msg.type === 'agentCreated' ? [msg.id] : (msg.agents ?? []);
@@ -154,6 +162,27 @@ export function esDescartable(charId: number): boolean {
 
 export function costoDe(charId: number): number | undefined {
   return estado.subs.has(charId) ? undefined : estado.info.get(charId)?.costUsd;
+}
+
+/** Sesión (o sub-agente de una sesión) que se quedó sin tokens y todavía no le volvió la cuota. */
+export function dormidoDe(charId: number, ahora = Date.now()): boolean {
+  const s = estado.subs.get(charId);
+  const hasta = estado.info.get(s ? s.padre : charId)?.dormidoHasta;
+  if (hasta === null || hasta === undefined) return false;
+  return hasta === 0 || ahora < hasta * 1000;
+}
+
+/** Hora (local) en que vuelve la cuota, o null si no se sabe. */
+export function despiertaA(charId: number): Date | null {
+  const s = estado.subs.get(charId);
+  const hasta = estado.info.get(s ? s.padre : charId)?.dormidoHasta;
+  return hasta ? new Date(hasta * 1000) : null;
+}
+
+/** Sesión de WSL (otra cuenta): sus sub-agentes también. */
+export function esWsl(charId: number): boolean {
+  const s = estado.subs.get(charId);
+  return estado.info.get(s ? s.padre : charId)?.wsl === true;
 }
 
 export function inicioDe(charId: number): number | undefined {

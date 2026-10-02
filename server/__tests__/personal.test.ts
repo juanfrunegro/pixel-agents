@@ -2,7 +2,14 @@ import Fastify from 'fastify';
 import { describe, expect, it } from 'vitest';
 
 import { htmlOrganigrama, registrarOrganigrama } from '../src/personal/organigrama.js';
-import { costoUsd, metaDeSubagente, proyectoDe, SEPARADOR_META } from '../src/personal/personal.js';
+import {
+  costoUsd,
+  esDeWsl,
+  limiteDe,
+  metaDeSubagente,
+  proyectoDe,
+  SEPARADOR_META,
+} from '../src/personal/personal.js';
 
 describe('personal: proyecto de cada agente (áreas)', () => {
   it.each([
@@ -106,5 +113,46 @@ describe('personal: meta del sub-agente en el status', () => {
       t: 'general-purpose',
       m: 'hereda',
     });
+  });
+});
+
+describe('personal: dormido cuando se acaba la cuota', () => {
+  it('el mensaje sintético de rate_limit lo duerme hasta la hora de vuelta', () => {
+    expect(
+      limiteDe({
+        type: 'assistant',
+        error: 'rate_limit',
+        isApiErrorMessage: true,
+        quotaLimits: { status: 'rejected', resetsAt: 1790873400 },
+        message: { model: '<synthetic>' },
+      }),
+    ).toEqual({ dormido: true, hasta: 1790873400 });
+  });
+  it('sin hora de vuelta duerme igual (hasta = 0)', () => {
+    expect(limiteDe({ type: 'assistant', error: 'rate_limit' })).toEqual({
+      dormido: true,
+      hasta: 0,
+    });
+  });
+  it('una respuesta real del modelo lo despierta', () => {
+    expect(limiteDe({ type: 'assistant', message: { model: 'claude-opus-5-5' } })).toEqual({
+      dormido: false,
+    });
+  });
+  it('no mira el texto: una herramienta que imprime "session limit" no lo duerme', () => {
+    expect(limiteDe({ type: 'user' })).toBeNull();
+    expect(limiteDe({ type: 'assistant', message: { model: '<synthetic>' } })).toBeNull();
+  });
+});
+
+describe('personal: sesiones de WSL', () => {
+  it.each([
+    ['\\\\wsl.localhost\\Ubuntu\\home\\juanf\\.claude\\projects\\x\\a.jsonl', true],
+    ['\\\\wsl$\\Ubuntu\\home\\juanf\\.claude\\projects\\x\\a.jsonl', true],
+    ['//wsl.localhost/Ubuntu/home/juanf/a.jsonl', true],
+    ['C:\\Users\\juanf\\.claude\\projects\\x\\a.jsonl', false],
+    ['/home/juanf/.claude/projects/x/a.jsonl', false],
+  ])('%s → %s', (archivo, esperado) => {
+    expect(esDeWsl(archivo)).toBe(esperado);
   });
 });
