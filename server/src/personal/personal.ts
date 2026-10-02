@@ -7,6 +7,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 
+import { personaDe } from '../../../core/src/aspectoPersonal.js';
 import type { AgentStateStore } from '../agentStateStore.js';
 import type { AgentState } from '../types.js';
 
@@ -57,8 +58,19 @@ export function guardarNombre(clave: string, nombre: string): Nombres {
   return n;
 }
 
+/** Personas del organigrama en orden (el CEO primero): fija el personaje de cada una (core/src/aspectoPersonal). */
+export function ordenPersonas(n: Nombres = leerNombres()): string[] {
+  return [...new Set([personaDe(n.ceo), ...Object.keys(n.roles ?? {})])];
+}
+
 export function mensajeNombres(n: Nombres = leerNombres()): Record<string, unknown> {
-  return { type: 'agentNamesLoaded', ceo: n.ceo, agentes: n.agentes, descartables: n.descartables };
+  return {
+    type: 'agentNamesLoaded',
+    ceo: n.ceo,
+    agentes: n.agentes,
+    descartables: n.descartables,
+    orden: ordenPersonas(n),
+  };
 }
 
 // ── Proyecto de cada agente (áreas de la oficina) y sesiones de WSL ──────────
@@ -75,15 +87,32 @@ const PROYECTOS: Array<[RegExp, string]> = [
   [/(^|-)ev(-|$)/, 'Pruebas'],
 ];
 
+/** Nombres que devuelven las reglas fijas (para mandar a "Otros" los que no tienen sala propia). */
+export const PROYECTOS_CONOCIDOS = [...new Set(PROYECTOS.map(([, p]) => p))];
+
+export const normalizarCarpeta = (s: string): string =>
+  s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+/** Reglas de los proyectos de Orca que no están en PROYECTOS (oficina.ts las carga al arrancar y al recargar). */
+let reglasExtra: Array<[RegExp, string]> = [];
+export function setReglasExtra(reglas: Array<[string, string]>): void {
+  // Las claves vienen de normalizarCarpeta: solo [a-z0-9-], no hace falta escaparlas.
+  reglasExtra = reglas.map(([clave, nombre]) => [new RegExp(`(^|-)${clave}(-|$)`), nombre]);
+}
+
 /** Resolver de carpeta para las Áreas: un agente en un workspace de Orca o en WSL cae en el área de su proyecto. */
-export function proyectoDe(ctx: { cwd?: string; projectDir?: string }): string | undefined {
+export function proyectoDe(
+  ctx: { cwd?: string; projectDir?: string },
+  conExtra = true,
+): string | undefined {
+  const reglas = conExtra ? [...PROYECTOS, ...reglasExtra] : PROYECTOS;
   for (const fuente of [ctx.cwd, ctx.projectDir ? path.basename(ctx.projectDir) : undefined]) {
     if (!fuente) continue;
-    const s = fuente
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/-+$/, '');
-    const hit = PROYECTOS.find(([re]) => re.test(s));
+    const s = normalizarCarpeta(fuente);
+    const hit = reglas.find(([re]) => re.test(s));
     if (hit) return hit[1];
   }
   return undefined;

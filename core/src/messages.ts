@@ -40,7 +40,8 @@ export type ServerMessage =
   | WorkspaceFolders
   | AgentDiagnostics
   | AgentInfo
-  | AgentNamesLoaded;
+  | AgentNamesLoaded
+  | OficinaRecargada;
 
 export type ClientMessage =
   | WebviewReady
@@ -66,7 +67,8 @@ export type ClientMessage =
   | SetShowAreas
   | RequestDiagnostics
   | RenameAgent
-  | ShutdownServer;
+  | ShutdownServer
+  | RecargarOficina;
 
 export interface ProviderCapabilities {
   type: 'providerCapabilities';
@@ -331,6 +333,14 @@ export interface AgentNamesLoaded {
   ceo: string;
   agentes: Record<string, string>;
   descartables: string[];
+  orden?: string[];
+}
+
+export interface OficinaRecargada {
+  type: 'oficinaRecargada';
+  salas?: string[];
+  puestos?: number;
+  error?: string;
 }
 
 export interface WebviewReady {
@@ -456,4 +466,8 @@ export interface RenameAgent {
 
 export interface ShutdownServer {
   type: 'shutdownServer';
+}
+
+export interface RecargarOficina {
+  type: 'recargarOficina';
 }

@@ -4,12 +4,14 @@
  */
 import { useSyncExternalStore } from 'react';
 
+import { aspectoDePersona, personaDe } from '../../../core/src/aspectoPersonal.js';
 import { COLOR_FABLE, COLOR_HAIKU, COLOR_OPUS, COLOR_SIN_MODELO, COLOR_SONNET } from './colores.js';
 
 export interface Nombres {
   ceo: string;
   agentes: Record<string, string>;
   descartables: string[];
+  orden?: string[]; // personas del organigrama, en orden: fija el personaje de cada una
 }
 
 export interface MetaSub {
@@ -71,6 +73,7 @@ export function alMensaje(msg: any): void {
       ceo: msg.ceo,
       agentes: msg.agentes ?? {},
       descartables: msg.descartables ?? [],
+      orden: Array.isArray(msg.orden) ? msg.orden : [],
     };
     avisar();
   } else if (msg?.type === 'agentInfo') {
@@ -82,9 +85,26 @@ export function alMensaje(msg: any): void {
   }
 }
 
-/** Llamado cuando el original crea el personaje de un sub-agente. */
-export function registrarSub(subId: number, padre: number, toolId: string): void {
+/**
+ * Llamado cuando el original crea el personaje de un sub-agente. Si es un agente con nombre (Pepe, Jere…) le pone el
+ * personaje fijo de su persona, el mismo del organigrama, en vez del de su padre.
+ */
+export function registrarSub(
+  subId: number,
+  padre: number,
+  toolId: string,
+  personaje?: { palette: number; hueShift: number },
+  paletas = 6,
+): void {
   estado.subs.set(subId, { padre, toolId });
+  const tipo = estado.metaPorTool.get(toolId)?.t;
+  const nombre = tipo ? estado.nombres.agentes[tipo] : undefined;
+  const aspecto =
+    nombre && aspectoDePersona(personaDe(nombre), estado.nombres.orden ?? [], paletas);
+  if (personaje && aspecto) {
+    personaje.palette = aspecto.palette;
+    personaje.hueShift = aspecto.hueShift;
+  }
   if (!estado.inicio.has(subId)) estado.inicio.set(subId, Date.now());
   avisar();
 }

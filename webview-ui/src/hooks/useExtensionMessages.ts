@@ -11,7 +11,7 @@ import { buildDynamicCatalog } from '../office/layout/furnitureCatalog.js';
 import { migrateLayoutColors } from '../office/layout/layoutSerializer.js';
 import { setCarpetSprites } from '../office/sprites/carpetTiles.js';
 import { setPetTemplates } from '../office/sprites/petSpriteData.js';
-import { setCharacterTemplates } from '../office/sprites/spriteData.js';
+import { getLoadedCharacterCount, setCharacterTemplates } from '../office/sprites/spriteData.js';
 import {
   extractToolName,
   isSubagentToolName,
@@ -404,7 +404,7 @@ export function useExtensionMessages(
         ) {
           const label = status.startsWith('Subtask:') ? status.slice('Subtask:'.length).trim() : '';
           const subId = os.addSubagent(id, toolId);
-          registrarSub(subId, id, toolId); // personal
+          registrarSub(subId, id, toolId, os.characters.get(subId), getLoadedCharacterCount()); // personal
           setSubagentCharacters((prev) => {
             if (prev.some((s) => s.id === subId)) return prev;
             return [...prev, { id: subId, parentAgentId: id, parentToolId: toolId, label }];
@@ -552,7 +552,13 @@ export function useExtensionMessages(
         let subId = os.getSubagentId(id, parentToolId);
         if (subId === null) {
           subId = os.addSubagent(id, parentToolId);
-          registrarSub(subId, id, parentToolId); // personal
+          registrarSub(
+            subId,
+            id,
+            parentToolId,
+            os.characters.get(subId),
+            getLoadedCharacterCount(),
+          ); // personal
           const newSubId = subId;
           setSubagentCharacters((prev) => {
             if (prev.some((s) => s.id === newSubId)) return prev;

@@ -121,6 +121,7 @@ components:
         # Personal (copia de juanfrunegro): nombres, ficha y modelo
         - $ref: '#/components/schemas/AgentInfo'
         - $ref: '#/components/schemas/AgentNamesLoaded'
+        - $ref: '#/components/schemas/OficinaRecargada'
       discriminator: type
 
     ClientMessage:
@@ -150,6 +151,7 @@ components:
         # Personal (copia de juanfrunegro)
         - $ref: '#/components/schemas/RenameAgent'
         - $ref: '#/components/schemas/ShutdownServer'
+        - $ref: '#/components/schemas/RecargarOficina'
       discriminator: type
 
     # ── Personal (copia de juanfrunegro) ──────────────────────────
@@ -187,6 +189,11 @@ components:
           type: array
           items:
             type: string
+        orden:
+          description: Personas del organigrama en orden (el CEO primero); fija el personaje de cada una.
+          type: array
+          items:
+            type: string
 
     RenameAgent:
       description: Cambia el nombre de fantasía de un tipo de agente ("ceo" para la sesión principal).
@@ -209,6 +216,32 @@ components:
       properties:
         type:
           const: shutdownServer
+
+    RecargarOficina:
+      description: Vuelve a armar las salas con los proyectos de Orca, sin reiniciar el servidor (botón Recargar).
+      type: object
+      additionalProperties: false
+      required: [type]
+      properties:
+        type:
+          const: recargarOficina
+
+    OficinaRecargada:
+      description: Resultado de recargarOficina. Los clientes recargan la página para tomar el plano nuevo.
+      type: object
+      additionalProperties: false
+      required: [type]
+      properties:
+        type:
+          const: oficinaRecargada
+        salas:
+          type: array
+          items:
+            type: string
+        puestos:
+          type: integer
+        error:
+          type: string
 
     # ── Server message variants ────────────────────────────────────
 

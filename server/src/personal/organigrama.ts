@@ -7,7 +7,10 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 
-import { definiciones, leerNombres } from './personal.js';
+import { aspectoDePersona, personaDe } from '../../../core/src/aspectoPersonal.js';
+import { PALETTE_COUNT } from '../constants.js';
+import type { Definicion, Nombres } from './personal.js';
+import { definiciones, leerNombres, ordenPersonas } from './personal.js';
 
 interface Uso {
   veces: number;
@@ -62,74 +65,129 @@ function color(m?: string): string {
   return '#9aa0ab';
 }
 
-export function htmlOrganigrama(): string {
-  const n = leerNombres();
+/** Áreas de la empresa por defecto (se pisan con "areas" en nombres.json: { "Área": ["Persona", …] }). */
+const AREAS: Record<string, string[]> = {
+  Ingeniería: ['Pepe', 'Tomo', 'Gibi'],
+  Diseño: ['Murga'],
+  Operaciones: ['Maxi', 'Vincho'],
+  Finanzas: ['Nico', 'Jere'],
+  Comercial: ['Fran', 'Cami'],
+  Conocimiento: ['Lucho', 'Santi'],
+};
+
+/** Personaje pixelado de la persona: el mismo sprite (y tono) que tiene en la oficina. */
+function avatar(persona: string, orden: string[], grande = false): string {
+  const a = aspectoDePersona(persona, orden, PALETTE_COUNT) ?? { palette: 0, hueShift: 0 };
+  const filtro = a.hueShift ? `;filter:hue-rotate(${a.hueShift}deg)` : '';
+  return `<span class="av${grande ? ' g' : ''}" style="background-image:url(/assets/characters/char_${a.palette}.png)${filtro}" aria-hidden="true"></span>`;
+}
+
+interface Datos {
+  nombres: Nombres;
+  defs: Map<string, Definicion>;
+  uso: Map<string, Uso>;
+}
+
+export function htmlOrganigrama(
+  datos: Datos = { nombres: leerNombres(), defs: definiciones(), uso: usoPorAgente() },
+): string {
+  const { nombres: n, defs, uso } = datos;
   const roles = (n.roles ?? {}) as Record<string, string>;
   const externos = (n.externos ?? {}) as Record<string, string>;
-  const defs = definiciones();
-  const uso = usoPorAgente();
-  const persona = (nombre: string) => nombre.split(' · ')[0].trim();
-  const grupos = new Map<string, string[]>();
-  for (const p of Object.keys(roles)) grupos.set(p, []);
+  const orden = ordenPersonas(n);
+  const ceo = personaDe(n.ceo);
+
+  // Persona → sus agentes (internos definidos y externos).
+  const equipo = new Map<string, string[]>();
+  for (const p of orden) equipo.set(p, []);
   const sinNombre: string[] = [];
   for (const interno of defs.keys()) {
     const nombre = n.agentes[interno];
     if (!nombre) sinNombre.push(interno);
-    else grupos.set(persona(nombre), [...(grupos.get(persona(nombre)) ?? []), interno]);
+    else equipo.set(personaDe(nombre), [...(equipo.get(personaDe(nombre)) ?? []), interno]);
   }
   for (const [clave, nombre] of Object.entries(externos)) {
-    grupos.set(persona(nombre), [...(grupos.get(persona(nombre)) ?? []), `externo:${clave}`]);
+    equipo.set(personaDe(nombre), [...(equipo.get(personaDe(nombre)) ?? []), `externo:${clave}`]);
   }
 
-  const tarjeta = (interno: string): string => {
+  // Área → personas. Las que no están en ninguna área van a "Otros puestos".
+  const areasConfig =
+    n.areas && typeof n.areas === 'object' ? (n.areas as Record<string, string[]>) : AREAS;
+  const areas = new Map<string, string[]>();
+  const ubicadas = new Set<string>([ceo]);
+  for (const [area, personas] of Object.entries(areasConfig)) {
+    const hay = (Array.isArray(personas) ? personas : []).filter((p) => equipo.has(p));
+    hay.forEach((p) => ubicadas.add(p));
+    if (hay.length) areas.set(area, hay);
+  }
+  const resto = [...equipo.keys()].filter((p) => !ubicadas.has(p));
+  if (resto.length) areas.set('Otros puestos', resto);
+
+  const agente = (interno: string, persona: string): string => {
     if (interno.startsWith('externo:')) {
       const k = interno.slice(8);
-      return `<div class="ag"><b>${esc(externos[k])}</b><span class="int">${esc(k)} · fuera de Claude Code (no aparece en la oficina)</span></div>`;
+      const puesto = externos[k].split(' · ').slice(1).join(' · ') || k;
+      return `<li class="ag ext">${avatar(persona, orden)}<div><b>${esc(puesto)}</b><span class="int">fuera de Claude Code · no aparece en la oficina</span></div></li>`;
     }
     const d = defs.get(interno)!;
     const u = uso.get(interno);
     const nombre = n.agentes[interno] ?? interno;
+    const puesto = nombre.split(' · ').slice(1).join(' · ') || interno;
     const rinde = u
       ? `${u.veces} ${u.veces === 1 ? 'vez' : 'veces'} · US$ ${(u.costo / u.veces).toFixed(2)} promedio · notas ${u.bien} bien / ${u.mal} mal · última ${esc(u.ultima)}`
       : 'sin uso registrado todavía';
-    return `<div class="ag" style="border-left-color:${color(d.modelo)}">
-      <b>${esc(nombre)}</b><span class="int">${esc(interno)} · ${esc(d.proyecto)}</span>
-      <span class="chip" style="background:${color(d.modelo)}">${esc(d.modelo ?? 'hereda')}${d.esfuerzo ? ' · ' + esc(d.esfuerzo) : ''}</span>
-      <p>${esc((d.descripcion ?? '').slice(0, 260))}</p><span class="uso">${rinde}</span></div>`;
+    return `<li class="ag" style="border-left-color:${color(d.modelo)}">${avatar(persona, orden)}<div>
+      <b>${esc(puesto)}</b> <span class="chip" style="background:${color(d.modelo)}">${esc(d.modelo ?? 'hereda')}${d.esfuerzo ? ' · ' + esc(d.esfuerzo) : ''}</span>
+      <span class="int">${esc(interno)} · ${esc(d.proyecto)}</span>
+      <p>${esc((d.descripcion ?? '').slice(0, 200))}</p><span class="uso">${rinde}</span></div></li>`;
   };
 
-  const bloques = [...grupos.entries()]
-    .sort(([a], [b]) => (a === persona(n.ceo) ? -1 : b === persona(n.ceo) ? 1 : a.localeCompare(b)))
-    .map(([p, internos]) => {
-      const esCeo = p === persona(n.ceo);
-      const cuerpo = esCeo
-        ? '<div class="ag" style="border-left-color:#e8832a"><b>' +
-          esc(n.ceo) +
-          '</b><span class="int">sesión principal · Windows: Sonnet + asesor Opus · WSL: Opus + asesor Fable</span></div>'
-        : internos.length
-          ? internos.map(tarjeta).join('')
-          : '<div class="ag vac">Puesto sin agente todavía</div>';
-      return `<section><h2>${esc(p)}</h2><p class="rol">${esc(roles[p] ?? '')}</p>${cuerpo}</section>`;
-    })
+  const puesto = (p: string): string => {
+    const internos = equipo.get(p) ?? [];
+    return `<div class="puesto"><div class="jefe">${avatar(p, orden, true)}<div><b>${esc(p)}</b><span class="rol">${esc(roles[p] ?? '')}</span></div></div>
+      ${internos.length ? `<ul>${internos.map((i) => agente(i, p)).join('')}</ul>` : '<p class="vac">Puesto sin agente todavía</p>'}</div>`;
+  };
+
+  const bloques = [...areas.entries()]
+    .map(
+      ([area, personas]) =>
+        `<section class="area"><h2>${esc(area)}</h2>${personas.map(puesto).join('')}</section>`,
+    )
     .join('');
   const sin = sinNombre.length
-    ? `<section><h2>Sin nombre</h2><p class="rol">Agentes definidos sin nombre de fantasía en nombres.json</p>${sinNombre.map(tarjeta).join('')}</section>`
+    ? `<section class="area"><h2>Sin nombre</h2><p class="rol">Agentes definidos sin nombre de fantasía en nombres.json</p><ul>${sinNombre
+        .map((i) => agente(i, ''))
+        .join('')}</ul></section>`
     : '';
 
   return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Organigrama de agentes</title><style>
+*{box-sizing:border-box}
 body{margin:0;background:#16181f;color:#e7e9ee;font:15px/1.45 system-ui,sans-serif;padding:24px 16px 48px}
-h1{margin:0 0 4px;font-size:26px}.sub{color:#9ba2b0;margin:0 0 20px;max-width:70ch}
-.ley{display:flex;flex-wrap:wrap;gap:6px 16px;margin-bottom:20px;font-size:13px;color:#9ba2b0}.ley i{display:inline-block;width:10px;height:10px;margin-right:5px}
-main{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
-section{background:#1f222b;border:1px solid #2f3440;border-radius:6px;padding:14px;display:grid;gap:8px;align-content:start}
-h2{margin:0;font-size:20px}.rol{margin:0;color:#9ba2b0;font-size:13px}
-.ag{border-left:4px solid #555;padding:6px 10px;background:#262a35;border-radius:3px;display:grid;gap:3px}
-.ag p{margin:0;font-size:13px;color:#c9cdd6}.int{font:12px ui-monospace,monospace;color:#9ba2b0}.uso{font-size:12px;color:#9ba2b0}
-.chip{justify-self:start;font-size:11px;font-weight:700;color:#111;padding:0 6px;border-radius:3px}.vac{color:#9ba2b0;border-left-style:dashed}
+h1{margin:0 0 4px;font-size:26px}.sub{color:#9ba2b0;margin:0 0 16px;max-width:75ch}
+.ley{display:flex;flex-wrap:wrap;gap:6px 16px;margin-bottom:24px;font-size:13px;color:#9ba2b0}.ley i{display:inline-block;width:10px;height:10px;margin-right:5px}
+.av{flex:none;width:32px;height:64px;background-size:224px 192px;background-position:-32px 0;image-rendering:pixelated;margin:-14px 0 -6px}
+.av.g{width:48px;height:96px;background-size:336px 288px;background-position:-48px 0;margin:-22px 0 -8px}
+.ceo{display:flex;justify-content:center;position:relative;padding-bottom:28px}
+.ceo .tarjeta{display:flex;gap:12px;align-items:center;background:#262a35;border:2px solid #e8832a;border-radius:6px;padding:14px 20px 10px}
+.ceo .tarjeta b{font-size:22px;display:block}
+.ceo:after{content:"";position:absolute;bottom:0;left:50%;height:28px;border-left:2px solid #3a4050}
+main{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:14px;border-top:2px solid #3a4050;padding-top:20px}
+.area{background:#1f222b;border:1px solid #2f3440;border-radius:6px;padding:12px;display:grid;gap:12px;align-content:start;position:relative}
+.area:before{content:"";position:absolute;top:-21px;left:50%;height:20px;border-left:2px solid #3a4050}
+h2{margin:0;font-size:19px;letter-spacing:.02em}
+.puesto{display:grid;gap:6px}
+.jefe{display:flex;gap:10px;align-items:center;padding-top:14px}.jefe b{font-size:17px;display:block}
+.rol{color:#9ba2b0;font-size:13px}
+ul{list-style:none;margin:0 0 0 22px;padding:0 0 0 12px;border-left:2px solid #3a4050;display:grid;gap:6px}
+.ag{display:flex;gap:8px;align-items:flex-start;border-left:4px solid #555;padding:14px 10px 6px 6px;background:#262a35;border-radius:3px}
+.ag div{display:grid;gap:2px;min-width:0}.ag.ext{border-left-style:dashed}
+.ag p{margin:0;font-size:13px;color:#c9cdd6}.int{font:12px ui-monospace,monospace;color:#9ba2b0;overflow-wrap:anywhere}.uso{font-size:12px;color:#9ba2b0}
+.chip{font-size:11px;font-weight:700;color:#111;padding:0 6px;border-radius:3px;white-space:nowrap}.vac{margin:0 0 0 34px;color:#9ba2b0;font-size:13px}
 </style></head><body><h1>Organigrama de agentes</h1>
-<p class="sub">Armado en vivo con nombres.json, la definición de cada agente y el registro de rendimiento. Para cambiar un nombre: ficha del agente en la oficina o el archivo ~/.claude/agents/nombres.json.</p>
+<p class="sub">Armado en vivo con nombres.json, la definición de cada agente y el registro de rendimiento. Cada persona tiene su personaje, el mismo que usa en la oficina. Para cambiar un nombre: ficha del agente en la oficina o ~/.claude/agents/nombres.json (ahí también se cambian las áreas, con la clave "areas").</p>
 <div class="ley"><span><i style="background:#e8832a"></i>Opus</span><span><i style="background:#3b9bd6"></i>Sonnet</span><span><i style="background:#a463e0"></i>Fable</span><span><i style="background:#4cb36a"></i>Haiku</span><span><i style="background:#9aa0ab"></i>hereda del que lo lanza</span></div>
+<div class="ceo"><div class="tarjeta">${avatar(ceo, orden, true)}<div><b>${esc(n.ceo)}</b><span class="rol">${esc(roles[ceo] ?? 'CEO')}</span><br><span class="int">sesión principal · en la oficina cada sesión tiene su propio personaje</span></div></div></div>
 <main>${bloques}${sin}</main></body></html>`;
 }
 

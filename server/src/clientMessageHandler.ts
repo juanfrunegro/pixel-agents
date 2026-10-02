@@ -13,6 +13,7 @@ import {
 } from './configPersistence.js';
 import { HUE_SHIFT_MAX_DEG, PALETTE_COUNT } from './constants.js';
 import { readLayoutFromFile, writeLayoutToFile } from './layoutPersistence.js';
+import { recargarOficina } from './personal/oficina.js';
 import { guardarNombre, mensajeNombres } from './personal/personal.js';
 import type { ConsentEffects } from './providers/hook/consentExecutor.js';
 import { applyConsentChoice } from './providers/hook/consentExecutor.js';
@@ -283,6 +284,22 @@ export function handleClientMessage(
       if (ctx.privileged) {
         console.log('[Pixel Agents] Apagado pedido desde la oficina.');
         setTimeout(() => process.exit(0), 300);
+      }
+      break;
+    }
+    case 'recargarOficina': {
+      // Botón "Recargar": salas según los proyectos de Orca, sin reiniciar. Los clientes recargan la página.
+      if (!ctx.privileged) break;
+      try {
+        if (!cache?.defaultLayout) throw new Error('falta el plano original');
+        const r = recargarOficina(cache.defaultLayout);
+        console.log(
+          `[Pixel Agents] Oficina recargada: ${r.salas.join(', ')} (${r.puestos} puestos).`,
+        );
+        store.broadcast({ type: 'oficinaRecargada', ...r });
+      } catch (err) {
+        console.error('[Pixel Agents] No se pudo recargar la oficina:', err);
+        send({ type: 'oficinaRecargada', error: String(err) });
       }
       break;
     }

@@ -31,6 +31,35 @@ describe('personal: organigrama', () => {
   it('arma una página aunque no haya nombres ni agentes', () => {
     expect(htmlOrganigrama()).toContain('<title>Organigrama de agentes</title>');
   });
+  it('tipo empresa: CEO arriba, áreas, puestos y agentes con el personaje de su persona', () => {
+    const html = htmlOrganigrama({
+      nombres: {
+        ceo: 'Juan',
+        roles: { Juan: 'CEO', Pepe: 'Revisa código', Jere: 'Contabilidad', Zoe: 'Algo nuevo' },
+        agentes: { 'buscador-de-bugs': 'Pepe · bugs', 'conciliador-cobros': 'Jere · cobros' },
+        descartables: [],
+        externos: { pi: 'Pepe · Pi (DeepSeek)' },
+      },
+      defs: new Map([
+        ['buscador-de-bugs', { modelo: 'sonnet', archivo: 'a.md', proyecto: 'Todos' }],
+        ['conciliador-cobros', { modelo: 'sonnet', archivo: 'b.md', proyecto: 'ERP' }],
+        ['sin-bautizar', { archivo: 'c.md', proyecto: 'Todos' }],
+      ]),
+      uso: new Map(),
+    });
+    const pos = (t: string) => html.indexOf(t);
+    // Áreas por defecto, en orden, y la persona sin área en "Otros puestos".
+    expect(pos('<h2>Ingeniería</h2>')).toBeGreaterThan(0);
+    expect(pos('<h2>Finanzas</h2>')).toBeGreaterThan(pos('<h2>Ingeniería</h2>'));
+    expect(pos('<h2>Otros puestos</h2>')).toBeGreaterThan(pos('<h2>Finanzas</h2>'));
+    expect(pos('<b>Zoe</b>')).toBeGreaterThan(pos('<h2>Otros puestos</h2>'));
+    // Puesto del agente = lo que va después de "·"; su avatar es el de la persona (Pepe = 2.º → char_1).
+    expect(html).toContain('<b>bugs</b>');
+    expect(html).toMatch(/char_1\.png[^>]*><\/span><div>\s*<b>bugs<\/b>/);
+    expect(html).toContain('<b>Pi (DeepSeek)</b>');
+    expect(html).toContain('<h2>Sin nombre</h2>');
+    expect(pos('class="ceo"')).toBeLessThan(pos('<main>'));
+  });
   it('sin el token de la oficina responde 403; con el token, la página', async () => {
     const app = Fastify();
     registrarOrganigrama(app, 'secreto');
