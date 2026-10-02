@@ -6,6 +6,7 @@
  * sala, así que una sala que ya existía conserva sus asientos al recargar.
  */
 import * as fs from 'fs';
+import { createRequire } from 'module';
 import * as os from 'os';
 import * as path from 'path';
 
@@ -21,6 +22,14 @@ import {
 import { readConfig, writeConfig } from '../configPersistence.js';
 import { LAYOUT_FILE_DIR, LAYOUT_FILE_NAME } from '../constants.js';
 import { readLayoutFromFile, writeLayoutToFile } from '../layoutPersistence.js';
+import {
+  guardarExtra,
+  leerCarpetas,
+  mismaRuta,
+  modificado,
+  subcarpetas,
+  validarCarpeta,
+} from './carpetas.js';
 import {
   asignables,
   guardarOcupacion,
@@ -80,23 +89,173 @@ export function rutaDatosOrca(): string | null {
   return fs.existsSync(ruta) ? ruta : null;
 }
 
-/** Proyectos agregados a Orca. Lista vacía si Orca no está instalado o el archivo no se puede leer. */
-export function leerProyectosOrca(ruta = rutaDatosOrca()): ProyectoOrca[] {
+type RepoCrudo = { displayName?: unknown; path?: unknown; badgeColor?: unknown };
+
+function deRepos(repos: RepoCrudo[] | undefined): ProyectoOrca[] {
+  return (repos ?? [])
+    .filter((r) => typeof r.displayName === 'string' && typeof r.path === 'string')
+    .map((r) => ({
+      nombre: (r.displayName as string).trim(),
+      ruta: r.path as string,
+      color: typeof r.badgeColor === 'string' ? r.badgeColor : undefined,
+    }));
+}
+
+/**
+ * Base SQLite donde las versiones nuevas de Orca guardan los proyectos (profile-state.db, documento "repos"). Desde
+ * esa migración orca-data.json quedó congelado: un proyecto agregado después solo está acá. PIXEL_ORCA_DB la pisa.
+ */
+export function rutaDbOrca(): string | null {
+  if (process.env.PIXEL_ORCA_DB) return process.env.PIXEL_ORCA_DB;
+  if (process.env.PIXEL_ORCA_DATA) return null; // tests con un orca-data.json armado: no mirar la base real
+  const json = rutaDatosOrca();
+  if (!json) return null;
+  const ruta = path.join(path.dirname(json), 'profile-state.db');
+  return fs.existsSync(ruta) ? ruta : null;
+}
+
+/** Proyectos del documento "repos" de profile-state.db (solo lectura). null si no se puede leer. */
+export function leerReposDb(ruta: string | null): ProyectoOrca[] | null {
+  if (!ruta) return null;
+  try {
+    // node:sqlite viene con Node ≥ 22.5; con uno más viejo cae al JSON.
+    const req = createRequire(path.join(process.cwd(), 'pixel-agents.js'));
+    const { DatabaseSync } = req('node:sqlite') as typeof import('node:sqlite');
+    const db = new DatabaseSync(ruta, { readOnly: true });
+    try {
+      const fila = db
+        .prepare("SELECT payload FROM profile_state_documents WHERE domain = 'repos'")
+        .get() as { payload?: unknown } | undefined;
+      if (typeof fila?.payload !== 'string') return null;
+      const repos = JSON.parse(fila.payload) as unknown;
+      return Array.isArray(repos) ? deRepos(repos as RepoCrudo[]) : null;
+    } finally {
+      db.close();
+    }
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Proyectos agregados a Orca. Sin argumento: la base de Orca (profile-state.db) y, si no está o no se puede leer, el
+ * orca-data.json. Con una ruta: ese JSON. Lista vacía si Orca no está instalado o no se puede leer.
+ */
+export function leerProyectosOrca(ruta?: string | null): ProyectoOrca[] {
+  if (ruta === undefined) {
+    const db = leerReposDb(rutaDbOrca());
+    if (db) return db;
+    ruta = rutaDatosOrca();
+  }
   if (!ruta) return [];
   try {
-    const d = JSON.parse(fs.readFileSync(ruta, 'utf8')) as {
-      repos?: Array<{ displayName?: unknown; path?: unknown; badgeColor?: unknown }>;
-    };
-    return (d.repos ?? [])
-      .filter((r) => typeof r.displayName === 'string' && typeof r.path === 'string')
-      .map((r) => ({
-        nombre: (r.displayName as string).trim(),
-        ruta: r.path as string,
-        color: typeof r.badgeColor === 'string' ? r.badgeColor : undefined,
-      }));
+    const d = JSON.parse(fs.readFileSync(ruta, 'utf8')) as { repos?: RepoCrudo[] };
+    return deRepos(d.repos);
   } catch {
     return [];
   }
+}
+
+/**
+ * Proyectos que pueden tener sala: los de Orca y las carpetas que Juan ya puso en una oficina sin que estén en Orca
+ * (carpetas.ts). Se lee fresco cada vez (un proyecto recién agregado a Orca aparece enseguida), con 3 s de caché para
+ * no abrir la base varias veces seguidas en el mismo pedido.
+ */
+let cacheProyectos: { hecho: number; lista: ProyectoOrca[] } | null = null;
+export function leerProyectos(ahora = Date.now()): ProyectoOrca[] {
+  if (cacheProyectos && ahora - cacheProyectos.hecho < 3_000) return cacheProyectos.lista;
+  const lista = [...leerProyectosOrca()];
+  for (const e of leerCarpetas().extras) {
+    if (!lista.some((p) => mismaRuta(p.ruta, e.ruta)))
+      lista.push({ nombre: e.nombre, ruta: e.ruta });
+  }
+  cacheProyectos = { hecho: ahora, lista };
+  return lista;
+}
+
+/** Olvida la caché (al guardar una carpeta nueva). */
+export function olvidarProyectos(): void {
+  cacheProyectos = null;
+}
+
+export type Origen = 'orca' | 'carpeta' | 'otra';
+
+/** Algo que se puede poner en una oficina (menú "Asignar proyecto ▸"). */
+export interface Candidato {
+  /** Nombre de la sala que tendría (Chaina, Coucou…). */
+  nombre: string;
+  ruta: string;
+  origen: Origen;
+  /** Última modificación de la carpeta (ms), para ordenar. */
+  modificado: number;
+}
+
+/**
+ * Todo lo que se puede asignar: proyectos de Orca, carpetas ya agregadas a mano y las subcarpetas de la raíz de
+ * proyectos (IA Tools) que no son ninguna de las anteriores. Sin repetir sala ni ruta, sin el Brain ni "Otros"; la
+ * carpeta tocada más recientemente primero.
+ */
+export function candidatos(
+  orca: ProyectoOrca[] = leerProyectosOrca(),
+  carpetas = leerCarpetas(),
+  sub: (raiz: string) => Array<{ nombre: string; ruta: string; modificado?: number }> = subcarpetas,
+  mtime: (ruta: string) => number = modificado,
+): Candidato[] {
+  const out: Candidato[] = [];
+  const agregar = (p: ProyectoOrca, origen: Origen, mod?: number) => {
+    const nombre = salaDeProyecto(p);
+    if (!nombre || nombre === 'Brain' || nombre === 'Otros') return;
+    if (out.some((c) => c.nombre === nombre || mismaRuta(c.ruta, p.ruta))) return;
+    out.push({ nombre, ruta: p.ruta, origen, modificado: mod ?? mtime(p.ruta) });
+  };
+  for (const p of orca) agregar(p, 'orca');
+  for (const e of carpetas.extras) agregar({ nombre: e.nombre, ruta: e.ruta }, 'otra');
+  for (const s of sub(carpetas.raiz))
+    agregar({ nombre: s.nombre, ruta: s.ruta }, 'carpeta', s.modificado);
+  return out.sort((a, b) => b.modificado - a.modificado);
+}
+
+let cacheCandidatos: { hecho: number; lista: Candidato[] } | null = null;
+/** candidatos() con 5 s de caché (leer \\wsl.localhost tarda); `forzar` la vuelve a leer igual. */
+export function candidatosFrescos(forzar = false, ahora = Date.now()): Candidato[] {
+  if (!forzar && cacheCandidatos && ahora - cacheCandidatos.hecho < 5_000) {
+    return cacheCandidatos.lista;
+  }
+  cacheCandidatos = { hecho: ahora, lista: candidatos() };
+  return cacheCandidatos.lista;
+}
+
+/**
+ * Carpeta para "Otra carpeta…": la valida (carpetas.ts) y le da nombre de sala. Error si no sirve o si ya hay otro
+ * proyecto con ese nombre en otra carpeta.
+ */
+export function candidatoDeRuta(
+  crudo: unknown,
+  existentes: Candidato[] = candidatosFrescos(),
+  validar: (r: unknown) => { ruta: string } | { error: string } = validarCarpeta,
+): Candidato | { error: string } {
+  const v = validar(crudo);
+  if ('error' in v) return v;
+  const ya = existentes.find((c) => mismaRuta(c.ruta, v.ruta));
+  if (ya) return ya;
+  const nombre = path.win32.basename(v.ruta);
+  const p = { nombre, ruta: v.ruta };
+  const sala = salaDeProyecto(p);
+  if (!sala || sala === 'Brain' || sala === 'Otros') {
+    return { error: 'Esa carpeta ya es parte de otra sala fija (Brain u Otros).' };
+  }
+  if (existentes.some((c) => c.nombre === sala)) {
+    return { error: `Ya hay un proyecto que se llama ${sala} en otra carpeta.` };
+  }
+  return { nombre: sala, ruta: v.ruta, origen: 'otra', modificado: modificado(v.ruta) };
+}
+
+/** Deja guardada en carpetas.json una carpeta que no es de Orca (para que sus agentes caigan en su oficina). */
+export function recordarCarpeta(c: Candidato, orca: ProyectoOrca[] = leerProyectosOrca()): void {
+  if (orca.some((p) => mismaRuta(p.ruta, c.ruta))) return;
+  guardarExtra({ nombre: path.win32.basename(c.ruta.replace(/[\\/]+$/, '')), ruta: c.ruta });
+  olvidarProyectos();
+  cacheCandidatos = null;
 }
 
 const bonito = (s: string): string => {
@@ -110,7 +269,7 @@ export function salaDeProyecto(p: ProyectoOrca): string {
 }
 
 /** Proyecto de Orca de cada sala (el primero, si dos caen en la misma). */
-export function proyectosPorSala(proyectos = leerProyectosOrca()): Map<string, ProyectoOrca> {
+export function proyectosPorSala(proyectos = leerProyectos()): Map<string, ProyectoOrca> {
   const m = new Map<string, ProyectoOrca>();
   for (const p of proyectos) {
     const sala = salaDeProyecto(p);
@@ -165,10 +324,15 @@ export function salasDesde(proyectos: ProyectoOrca[]): {
  */
 export function salasConOcupacion(o: Ocupacion, deOrca: Sala[]): Sala[] {
   const color = new Map(deOrca.map((s) => [s.nombre, s.color]));
-  let libre = 0;
+  // Cada oficina ocupada con un color distinto de las otras (y del Brain y Otros): si el suyo ya lo usa otra sala,
+  // el primero libre de la paleta.
+  const usados = new Set([COLORES.Brain, COLORES.Otros]);
   const lugares = o.map((p, i): Sala => {
     if (!p) return { nombre: salaDelLugar(o, i), color: COLOR_LIBRE };
-    return { nombre: p, color: color.get(p) ?? COLORES[p] ?? PALETA[libre++ % PALETA.length] };
+    let c = color.get(p) ?? COLORES[p];
+    if (!c || usados.has(c)) c = PALETA.find((x) => !usados.has(x)) ?? c ?? PALETA[0];
+    usados.add(c);
+    return { nombre: p, color: c };
   });
   return [
     ...lugares,
@@ -557,9 +721,14 @@ export interface ResultadoRecarga {
   puestos: number;
 }
 
-/** Proyectos de Orca que pueden ocupar una oficina (para el menú "Asignar proyecto"). */
-export function proyectosDisponibles(proyectos = leerProyectosOrca()): string[] {
+/** Proyectos (Orca y carpetas ya agregadas) en el orden de siempre: el que usa la primera ocupación de las oficinas. */
+export function proyectosDisponibles(proyectos = leerProyectos()): string[] {
   return asignables(salasDesde(proyectos).salas.map((s) => s.nombre));
+}
+
+/** Lo que se puede poner en una oficina (menú "Asignar proyecto"): Orca, carpetas agregadas y las de IA Tools. */
+export function disponiblesDe(lista: Candidato[]): string[] {
+  return asignables(lista.map((c) => c.nombre));
 }
 
 /** Ocupación actual: la guardada o, la primera vez, la del plano que ya está en ~/.pixel-agents/layout.json. */
@@ -575,13 +744,21 @@ export function ocupacionActual(disponibles: string[]): Ocupacion {
 }
 
 /** Estado de las oficinas para el webview: qué hay en cada lugar y qué proyectos se pueden asignar. */
-export function mensajeOficinas(proyectos = leerProyectosOrca()): Record<string, unknown> {
-  const disponibles = proyectosDisponibles(proyectos);
-  const o = ocupacionActual(disponibles);
+export function mensajeOficinas(lista: Candidato[] = candidatosFrescos()): Record<string, unknown> {
+  const disponibles = disponiblesDe(lista);
+  const o = ocupacionActual(proyectosDisponibles());
   return {
     type: 'oficinasEstado',
     lugares: o.map((p, i) => ({ sala: salaDelLugar(o, i), proyecto: p })),
     disponibles,
+    candidatos: lista
+      .filter((c) => disponibles.includes(c.nombre))
+      .map((c) => ({
+        nombre: c.nombre,
+        ruta: c.ruta,
+        origen: c.origen,
+        modificado: Math.round(c.modificado),
+      })),
   };
 }
 
@@ -595,7 +772,7 @@ export function recargarOficina(
   original: Record<string, unknown>,
   ocupacion?: Ocupacion,
 ): ResultadoRecarga {
-  const deOrca = salasDesde(leerProyectosOrca());
+  const deOrca = salasDesde(leerProyectos());
   const o = ocupacion ?? ocupacionActual(asignables(deOrca.salas.map((s) => s.nombre)));
   guardarOcupacion(o);
   const reglas = deOrca.reglas;
@@ -622,5 +799,5 @@ export function recargarOficina(
 
 /** Al arrancar: carga las reglas de los proyectos nuevos de Orca sin tocar el plano. */
 export function cargarReglasOrca(): void {
-  setReglasExtra(salasDesde(leerProyectosOrca()).reglas);
+  setReglasExtra(salasDesde(leerProyectos()).reglas);
 }

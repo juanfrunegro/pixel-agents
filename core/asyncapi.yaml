@@ -158,6 +158,7 @@ components:
         - $ref: '#/components/schemas/RecargarOficina'
         - $ref: '#/components/schemas/AbrirProyecto'
         - $ref: '#/components/schemas/AsignarOficina'
+        - $ref: '#/components/schemas/PedirOficinas'
         - $ref: '#/components/schemas/SetVozSesion'
       discriminator: type
 
@@ -298,8 +299,10 @@ components:
 
     AsignarOficina:
       description: >-
-        Menú de una oficina: poner un proyecto de Orca en ella (si estaba en otra, se intercambian) o dejarla libre
-        (proyecto null). La oficina va por el nombre que muestra el plano ("Chaina", "Libre 3"). Solo con token.
+        Menú de una oficina: poner un proyecto en ella (de Orca, una carpeta de IA Tools o una ya agregada; si estaba en
+        otra, se intercambian) o dejarla libre (proyecto null). Con `carpeta` ("Otra carpeta…") se pone esa ruta, que
+        el servidor valida (existe, es carpeta, no es del sistema). La oficina va por el nombre que muestra el plano
+        ("Chaina", "Libre 3"). Solo con token.
       type: object
       additionalProperties: false
       required: [type, sala, proyecto]
@@ -310,6 +313,19 @@ components:
           type: string
         proyecto:
           type: [string, 'null']
+        carpeta:
+          type: string
+
+    PedirOficinas:
+      description: >-
+        Al abrir "Asignar proyecto ▸": pide la lista de nuevo (el servidor vuelve a leer Orca y las carpetas de IA Tools)
+        y contesta con oficinasEstado. Solo con token.
+      type: object
+      additionalProperties: false
+      required: [type]
+      properties:
+        type:
+          const: pedirOficinas
 
     SetVozSesion:
       description: >-
@@ -342,6 +358,28 @@ components:
           type: array
           items:
             type: string
+        candidatos:
+          description: Lo mismo que disponibles con su carpeta, de dónde sale y cuándo se tocó (la más reciente primero).
+          type: array
+          items:
+            $ref: '#/components/schemas/CandidatoOficina'
+
+    CandidatoOficina:
+      type: object
+      additionalProperties: false
+      required: [nombre, ruta, origen, modificado]
+      properties:
+        nombre:
+          type: string
+        ruta:
+          type: string
+        origen:
+          description: orca (proyecto de Orca), carpeta (subcarpeta de IA Tools), otra (agregada a mano).
+          type: string
+          enum: [orca, carpeta, otra]
+        modificado:
+          description: Última modificación de la carpeta, en ms.
+          type: number
 
     SkinsPersonalesLoaded:
       description: >-

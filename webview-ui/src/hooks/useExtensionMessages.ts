@@ -644,7 +644,7 @@ export function useExtensionMessages(
       } else if (msg.type === 'skinsPersonalesLoaded') {
         setSkins(msg.skins); // personal: skins de Marvel (solo estética)
       } else if (msg.type === 'oficinasEstado') {
-        setOficinas(msg.lugares, msg.disponibles); // personal: qué proyecto ocupa cada oficina (menú de la oficina)
+        setOficinas(msg.lugares, msg.disponibles, msg.candidatos); // personal: qué proyecto ocupa cada oficina (menú de la oficina)
       } else if (msg.type === 'floorTilesLoaded') {
         const sprites = msg.sprites as string[][][];
         console.log(`[Webview] Received ${sprites.length} floor tile patterns`);

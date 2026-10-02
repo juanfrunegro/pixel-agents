@@ -44,6 +44,7 @@ export default [
       'server/src/personal/hoy.ts',
       'server/src/personal/oficina.ts', // colores de las salas: datos del plano, no estilos
       'server/__tests__/oficina.test.ts',
+      'server/__tests__/carpetas.test.ts', // colores de salas de Orca: datos
     ],
     rules: {
       'pixel-agents/no-inline-colors': 'off',

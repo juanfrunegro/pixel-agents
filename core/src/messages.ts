@@ -75,6 +75,7 @@ export type ClientMessage =
   | RecargarOficina
   | AbrirProyecto
   | AsignarOficina
+  | PedirOficinas
   | SetVozSesion;
 
 export interface ProviderCapabilities {
@@ -370,12 +371,22 @@ export interface OficinasEstado {
   type: 'oficinasEstado';
   lugares: LugarOficina[];
   disponibles: string[];
+  candidatos?: CandidatoOficina[];
 }
 
 export interface LugarOficina {
   sala: string;
   proyecto: string | null;
 }
+
+export interface CandidatoOficina {
+  nombre: string;
+  ruta: string;
+  origen: AnonymousSchema_231;
+  modificado: number;
+}
+
+export type AnonymousSchema_231 = 'orca' | 'carpeta' | 'otra';
 
 export interface OficinaAsignada {
   type: 'oficinaAsignada';
@@ -519,15 +530,20 @@ export interface RecargarOficina {
 export interface AbrirProyecto {
   type: 'abrirProyecto';
   sala: string;
-  accion: AnonymousSchema_284;
+  accion: AnonymousSchema_289;
 }
 
-export type AnonymousSchema_284 = 'carpeta' | 'vscode';
+export type AnonymousSchema_289 = 'carpeta' | 'vscode';
 
 export interface AsignarOficina {
   type: 'asignarOficina';
   sala: string;
   proyecto: string | null;
+  carpeta?: string;
+}
+
+export interface PedirOficinas {
+  type: 'pedirOficinas';
 }
 
 export interface SetVozSesion {

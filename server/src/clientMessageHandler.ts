@@ -16,10 +16,14 @@ import { readLayoutFromFile, writeLayoutToFile } from './layoutPersistence.js';
 import { abrirProyecto } from './personal/abrir.js';
 import { asignarOficina } from './personal/ocupacion.js';
 import {
+  candidatoDeRuta,
+  candidatosFrescos,
+  disponiblesDe,
   mensajeOficinas,
   ocupacionActual,
   proyectosDisponibles,
   recargarOficina,
+  recordarCarpeta,
 } from './personal/oficina.js';
 import { cambiarVozSesion, guardarNombre, mensajeNombres } from './personal/personal.js';
 import { mensajeSkins } from './personal/skins.js';
@@ -318,12 +322,32 @@ export function handleClientMessage(
       if (!ctx.privileged) break;
       try {
         if (!cache?.defaultLayout) throw new Error('falta el plano original');
-        const disponibles = proyectosDisponibles();
-        const r = asignarOficina(ocupacionActual(disponibles), msg.sala, msg.proyecto, disponibles);
+        // Lista fresca: un proyecto recién agregado a Orca o una carpeta nueva de IA Tools se pueden asignar ya.
+        let lista = candidatosFrescos(true);
+        let proyecto: unknown = msg.proyecto;
+        if (typeof msg.carpeta === 'string') {
+          // "Otra carpeta…": la ruta se valida acá (existe, es carpeta, no es del sistema).
+          const c = candidatoDeRuta(msg.carpeta, lista);
+          if ('error' in c) {
+            send({ type: 'oficinaAsignada', error: c.error });
+            break;
+          }
+          if (!lista.some((x) => x.nombre === c.nombre)) lista = [...lista, c];
+          proyecto = c.nombre;
+        }
+        const r = asignarOficina(
+          ocupacionActual(proyectosDisponibles()),
+          msg.sala,
+          proyecto,
+          disponiblesDe(lista),
+        );
         if ('error' in r) {
           send({ type: 'oficinaAsignada', error: r.error });
           break;
         }
+        // Una carpeta que no es de Orca queda guardada, así sus agentes caen en esta oficina (también al reiniciar).
+        const elegido = lista.find((x) => x.nombre === proyecto);
+        if (elegido && elegido.origen !== 'orca') recordarCarpeta(elegido);
         const hecho = recargarOficina(cache.defaultLayout, r.ocupacion);
         console.log(`[Pixel Agents] Oficinas: ${hecho.salas.join(', ')}.`);
         store.broadcast({ type: 'oficinaRecargada', ...hecho });
@@ -331,6 +355,13 @@ export function handleClientMessage(
         console.error('[Pixel Agents] No se pudo asignar la oficina:', err);
         send({ type: 'oficinaAsignada', error: 'No se pudo cambiar la oficina.' });
       }
+      break;
+    }
+
+    case 'pedirOficinas': {
+      // Al abrir "Asignar proyecto ▸": la lista se vuelve a leer (Orca, carpetas de IA Tools) en ese momento.
+      if (!ctx.privileged) break;
+      send(mensajeOficinas());
       break;
     }
 

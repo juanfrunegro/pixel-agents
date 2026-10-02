@@ -16,6 +16,7 @@ import {
   cerrarMenuSala,
   cerrarPizarra,
   opcionesAsignar,
+  ORIGEN_TEXTO,
   REFRESCO_MS,
   usePizarra,
 } from './pizarra.js';
@@ -34,6 +35,8 @@ export function PanelesPersonales({
   usePersonal(); // nombres de los agentes
   const [aviso, setAviso] = useState<string | null>(null);
   const [asignando, setAsignando] = useState(false);
+  /** "Otra carpeta…": null = cerrado; texto = lo que va escribiendo. */
+  const [otra, setOtra] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isBrowserRuntime) return;
@@ -65,21 +68,33 @@ export function PanelesPersonales({
 
   // Cada vez que se abre (o cierra) el menú de una oficina, arranca sin la lista de proyectos desplegada.
   const menu = p.menu;
-  useEffect(() => setAsignando(false), [menu]);
+  useEffect(() => {
+    setAsignando(false);
+    setOtra(null);
+  }, [menu]);
 
   if (!isBrowserRuntime) return null;
   const color = (sala: string) =>
     colores?.find((a) => a.label === sala)?.color ?? COLOR_SALA_SIN_COLOR;
   const cerrarMenu = () => {
     setAsignando(false);
+    setOtra(null);
     cerrarMenuSala();
   };
   const asignar = (proyecto: string | null) => {
     transport.send({ type: 'asignarOficina', sala: p.menu!.sala, proyecto });
     cerrarMenu();
   };
+  const asignarCarpeta = () => {
+    const ruta = (otra ?? '').trim();
+    if (!ruta) return;
+    transport.send({ type: 'asignarOficina', sala: p.menu!.sala, proyecto: null, carpeta: ruta });
+    cerrarMenu();
+  };
   const libre = !!p.menu && esOficinaLibre(p.menu.sala);
-  const opciones = p.menu ? opcionesAsignar(p.menu.sala, p.oficinas, p.disponibles) : [];
+  const opciones = p.menu
+    ? opcionesAsignar(p.menu.sala, p.oficinas, p.disponibles, p.candidatos)
+    : [];
   const asignable = !!p.menu && p.oficinas.some((o) => o.sala === p.menu!.sala);
   const estilo = { fontSize: '18px', cursor: 'pointer', textDecoration: 'underline' } as const;
 
@@ -133,7 +148,11 @@ export function PanelesPersonales({
                 role="menuitem"
                 className="text-left"
                 style={estilo}
-                onClick={() => setAsignando(true)}
+                onClick={() => {
+                  setAsignando(true);
+                  // La lista se vuelve a leer ahora: un proyecto recién agregado a Orca o una carpeta nueva aparecen.
+                  transport.send({ type: 'pedirOficinas' });
+                }}
                 data-testid="asignar-proyecto"
               >
                 {libre ? 'Asignar proyecto ▸' : 'Cambiar proyecto ▸'}
@@ -143,7 +162,7 @@ export function PanelesPersonales({
               <div className="flex flex-col gap-1" style={{ paddingLeft: 8 }}>
                 {opciones.length === 0 && (
                   <span style={{ fontSize: '16px', opacity: 0.7 }}>
-                    No hay otros proyectos en Orca.
+                    No hay otros proyectos ni carpetas.
                   </span>
                 )}
                 {opciones.map((o) => (
@@ -153,17 +172,67 @@ export function PanelesPersonales({
                     className="text-left"
                     style={{ ...estilo, color: color(o.proyecto) }}
                     onClick={() => asignar(o.proyecto)}
-                    title={o.intercambia ? 'Ya tiene oficina: las dos se intercambian' : undefined}
+                    title={
+                      [o.ruta, o.intercambia ? 'Ya tiene oficina: las dos se intercambian' : '']
+                        .filter(Boolean)
+                        .join('\n') || undefined
+                    }
                   >
                     {o.proyecto}
-                    {o.intercambia && (
-                      <span style={{ fontSize: '15px', opacity: 0.7, textDecoration: 'none' }}>
+                    {(o.origen || o.intercambia) && (
+                      <span style={{ fontSize: '15px', opacity: 0.6, textDecoration: 'none' }}>
                         {' '}
-                        (intercambia)
+                        {[o.origen && ORIGEN_TEXTO[o.origen], o.intercambia && 'intercambia']
+                          .filter(Boolean)
+                          .join(' · ')}
                       </span>
                     )}
                   </button>
                 ))}
+                {otra === null ? (
+                  <button
+                    role="menuitem"
+                    className="text-left"
+                    style={{ ...estilo, opacity: 0.8 }}
+                    onClick={() => setOtra('')}
+                    data-testid="otra-carpeta"
+                  >
+                    Otra carpeta…
+                  </button>
+                ) : (
+                  <form
+                    className="flex flex-col gap-1"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      asignarCarpeta();
+                    }}
+                  >
+                    <input
+                      autoFocus
+                      value={otra}
+                      onChange={(e) => setOtra(e.target.value)}
+                      placeholder="C:\Users\juanf\Documents\..."
+                      aria-label="Ruta de la carpeta"
+                      data-testid="otra-carpeta-ruta"
+                      style={{
+                        fontSize: '16px',
+                        padding: '2px 6px',
+                        minWidth: 300,
+                        background: 'var(--color-bg-dark)',
+                        color: 'var(--color-text)',
+                        border: '2px solid var(--color-border)',
+                      }}
+                    />
+                    <button
+                      type="submit"
+                      className="text-left"
+                      style={estilo}
+                      disabled={!otra.trim()}
+                    >
+                      Poner esta carpeta
+                    </button>
+                  </form>
+                )}
               </div>
             )}
             {asignable && !libre && (

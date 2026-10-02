@@ -50,6 +50,8 @@ interface Estado {
   /** Oficinas asignables y su proyecto (null = libre), y los proyectos de Orca que se pueden poner (oficinasEstado). */
   oficinas: Array<{ sala: string; proyecto: string | null }>;
   disponibles: string[];
+  /** Lo mismo que disponibles con su carpeta y de dónde sale (Orca, IA Tools, agregada a mano). */
+  candidatos: CandidatoOficina[];
   /** Panel de la sala de comunicaciones (clic en Presentaciones): interruptor de voz de cada sesión. */
   comunicaciones: boolean;
   version: number;
@@ -63,6 +65,7 @@ const estado: Estado = {
   menu: null,
   oficinas: [],
   disponibles: [],
+  candidatos: [],
   comunicaciones: false,
   version: 0,
 };
@@ -94,13 +97,23 @@ export function setFilasPizarra(filas: FilaPizarra[], error: string | null = nul
   avisar();
 }
 
+export interface CandidatoOficina {
+  nombre: string;
+  ruta: string;
+  /** orca = proyecto de Orca, carpeta = subcarpeta de IA Tools, otra = agregada a mano ("Otra carpeta…"). */
+  origen: 'orca' | 'carpeta' | 'otra';
+  modificado: number;
+}
+
 /** Mensaje oficinasEstado del servidor. */
 export function setOficinas(
   oficinas: Array<{ sala: string; proyecto: string | null }>,
   disponibles: string[],
+  candidatos: CandidatoOficina[] = [],
 ): void {
   estado.oficinas = oficinas;
   estado.disponibles = disponibles;
+  estado.candidatos = Array.isArray(candidatos) ? candidatos : [];
   avisar();
 }
 
@@ -108,22 +121,45 @@ export interface OpcionAsignar {
   proyecto: string;
   /** Ya está en otra oficina: al elegirlo se intercambian. */
   intercambia: boolean;
+  /** De dónde sale (sin dato: lista vieja del servidor, solo nombres). */
+  origen?: CandidatoOficina['origen'];
+  ruta?: string;
 }
+
+/** Etiqueta corta del origen para el menú. */
+export const ORIGEN_TEXTO: Record<CandidatoOficina['origen'], string> = {
+  orca: 'Orca',
+  carpeta: 'IA Tools',
+  otra: 'agregada',
+};
 
 /** Proyectos para "Asignar proyecto ▸" en la oficina `sala` (sin el que ya tiene). */
 export function opcionesAsignar(
   sala: string,
   oficinas: Array<{ sala: string; proyecto: string | null }>,
   disponibles: string[],
+  candidatos: CandidatoOficina[] = [],
 ): OpcionAsignar[] {
   const actual = oficinas.find((o) => o.sala === sala)?.proyecto ?? null;
   const ubicados = new Set(oficinas.map((o) => o.proyecto).filter((p): p is string => !!p));
+  const datos = new Map(candidatos.map((c) => [c.nombre, c]));
+  // Con datos del servidor: la carpeta tocada más recientemente primero; sin datos, por nombre. Las que ya tienen
+  // oficina (se intercambian) siempre al final.
   return disponibles
     .filter((p) => p !== actual)
-    .map((p) => ({ proyecto: p, intercambia: ubicados.has(p) }))
+    .map((p): OpcionAsignar => {
+      const c = datos.get(p);
+      return {
+        proyecto: p,
+        intercambia: ubicados.has(p),
+        ...(c ? { origen: c.origen, ruta: c.ruta } : {}),
+      };
+    })
     .sort(
       (a, b) =>
-        Number(a.intercambia) - Number(b.intercambia) || a.proyecto.localeCompare(b.proyecto),
+        Number(a.intercambia) - Number(b.intercambia) ||
+        (datos.get(b.proyecto)?.modificado ?? 0) - (datos.get(a.proyecto)?.modificado ?? 0) ||
+        a.proyecto.localeCompare(b.proyecto),
     );
 }
 
