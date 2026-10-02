@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ESCENARIO_FILA, SALA_PRESENTACIONES } from '../../core/src/salasComunes.js';
 import { abrirProyecto, type Comando, comandoPara, rutaWsl } from '../src/personal/abrir.js';
@@ -13,6 +13,7 @@ import {
   resumirDia,
   trabajoDe,
   trabajosDeHoy,
+  trabajosDeHoyAsync,
 } from '../src/personal/hoy.js';
 import { generarLayout, proyectosPorSala, salasDesde } from '../src/personal/oficina.js';
 import { filasPizarra, parsearPendientes, tituloCorto } from '../src/personal/pizarra.js';
@@ -358,5 +359,56 @@ describe('tanda 3: resumen del día', () => {
     ]);
     // Sin nombre de fantasía para ese tipo, el sub-agente figura con su tipo (de su .meta.json).
     expect(trabajos.find((x) => x.esSub)?.agente).toBe('buscador-de-bugs');
+  });
+
+  it('la versión asíncrona da lo mismo y solo vuelve a leer los transcripts que cambiaron', async () => {
+    const raiz = fs.mkdtempSync(path.join(os.tmpdir(), 'pa-hoy-async-'));
+    temporales.push(raiz);
+    const proyecto = path.join(raiz, 'C--Users-juanf-Documents-IA-Tools-Poker-App');
+    const subs = path.join(proyecto, 'sesion1', 'subagents');
+    fs.mkdirSync(subs, { recursive: true });
+    const ahora = Date.now();
+    const hoy = inicioDeHoy();
+    const t = (ms: number) => new Date(Math.max(hoy, ahora - ms)).toISOString();
+    const sesion = path.join(proyecto, 'sesion1.jsonl');
+    fs.writeFileSync(
+      sesion,
+      [
+        linea({ type: 'user', timestamp: t(60_000) }),
+        linea({ type: 'user', timestamp: t(0) }),
+      ].join('\n'),
+    );
+    fs.writeFileSync(path.join(subs, 'agent-a1.jsonl'), linea({ type: 'user', timestamp: t(0) }));
+    fs.writeFileSync(
+      path.join(subs, 'agent-a1.meta.json'),
+      JSON.stringify({ agentType: 'buscador-de-bugs' }),
+    );
+
+    const orden = (xs: Array<{ archivo: string }>) =>
+      [...xs].sort((a, b) => a.archivo.localeCompare(b.archivo));
+    const primera = await trabajosDeHoyAsync([raiz], hoy);
+    expect(orden(primera)).toEqual(orden(trabajosDeHoy([raiz], hoy)));
+
+    // Sin cambios: no se vuelve a leer ningún .jsonl.
+    const leidos: string[] = [];
+    const original = fs.promises.readFile;
+    const espia = vi.spyOn(fs.promises, 'readFile').mockImplementation(((
+      f: fs.PathLike,
+      o: unknown,
+    ) => {
+      leidos.push(String(f));
+      return (original as (f: fs.PathLike, o: unknown) => Promise<string>)(f, o);
+    }) as typeof fs.promises.readFile);
+    try {
+      await trabajosDeHoyAsync([raiz], hoy);
+      expect(leidos.filter((f) => f.endsWith('.jsonl'))).toEqual([]);
+      // Cambia la sesión principal: solo esa se vuelve a leer.
+      fs.appendFileSync(sesion, '\n' + linea({ type: 'user', timestamp: t(0) }));
+      leidos.length = 0;
+      await trabajosDeHoyAsync([raiz], hoy);
+      expect(leidos.filter((f) => f.endsWith('.jsonl'))).toEqual([sesion]);
+    } finally {
+      espia.mockRestore();
+    }
   });
 });

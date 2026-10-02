@@ -187,6 +187,102 @@ export function trabajosDeHoy(
   return out;
 }
 
+/**
+ * Lo mismo que trabajosDeHoy, sin trabar el server: E/S asíncrona y memoria por archivo (solo se vuelven a leer los
+ * transcripts que cambiaron desde la vuelta anterior). La versión sincrónica tardaba ~3,5 s con los transcripts de WSL
+ * por \\wsl.localhost y, mientras tanto, el server no atendía a nadie (las pestañas se congelaban).
+ */
+const memoTrabajos = new Map<string, { clave: string; trabajo: Trabajo | null }>();
+
+export async function trabajosDeHoyAsync(
+  raices: string[] = [path.join(os.homedir() || '.', '.claude', 'projects'), ...raicesWsl()],
+  desde = inicioDeHoy(),
+): Promise<Trabajo[]> {
+  const fsp = fs.promises;
+  const n = leerNombres();
+  const vistos = new Set<string>();
+  const out: Trabajo[] = [];
+  const listarA = async (dir: string): Promise<string[]> => {
+    try {
+      return await fsp.readdir(dir);
+    } catch {
+      return [];
+    }
+  };
+  const statA = async (archivo: string): Promise<fs.Stats | null> => {
+    try {
+      return await fsp.stat(archivo);
+    } catch {
+      return null;
+    }
+  };
+  const tipoDeSubA = async (jsonl: string): Promise<string> => {
+    try {
+      const meta = JSON.parse(
+        await fsp.readFile(jsonl.replace(/\.jsonl$/, '.meta.json'), 'utf8'),
+      ) as { agentType?: unknown };
+      return typeof meta.agentType === 'string' && meta.agentType ? meta.agentType : 'subagente';
+    } catch {
+      return 'subagente';
+    }
+  };
+  const leer = async (archivo: string, proyectoDir: string, esSub: boolean): Promise<void> => {
+    const st = await statA(archivo);
+    if (!st || st.mtimeMs < desde) return;
+    let agente = n.ceo;
+    if (esSub) {
+      const tipo = await tipoDeSubA(archivo);
+      agente = n.agentes[tipo] ?? tipo;
+    }
+    const clave = `${desde}:${st.mtimeMs}:${st.size}:${agente}`;
+    vistos.add(archivo);
+    const previo = memoTrabajos.get(archivo);
+    if (previo?.clave === clave) {
+      if (previo.trabajo) out.push(previo.trabajo);
+      return;
+    }
+    let texto: string;
+    try {
+      texto = await fsp.readFile(archivo, 'utf8');
+    } catch {
+      return;
+    }
+    const trabajo = trabajoDe(
+      texto,
+      { archivo, proyectoDir, agente, esSub, wsl: esDeWsl(archivo) },
+      desde,
+    );
+    memoTrabajos.set(archivo, { clave, trabajo });
+    if (trabajo) out.push(trabajo);
+  };
+  for (const raiz of raices) {
+    for (const dir of await listarA(raiz)) {
+      const carpeta = path.join(raiz, dir);
+      const tareas: Array<Promise<void>> = [];
+      for (const f of await listarA(carpeta)) {
+        const ruta = path.join(carpeta, f);
+        if (f.endsWith('.jsonl')) {
+          tareas.push(leer(ruta, dir, false));
+          continue;
+        }
+        tareas.push(
+          (async () => {
+            const subs = path.join(ruta, 'subagents');
+            await Promise.all(
+              (await listarA(subs))
+                .filter((s) => s.endsWith('.jsonl'))
+                .map((s) => leer(path.join(subs, s), dir, true)),
+            );
+          })(),
+        );
+      }
+      await Promise.all(tareas);
+    }
+  }
+  for (const archivo of memoTrabajos.keys()) if (!vistos.has(archivo)) memoTrabajos.delete(archivo);
+  return out;
+}
+
 export interface FilaAgente {
   agente: string;
   esSub: boolean;
@@ -329,16 +425,29 @@ ${bloques || '<p class="vacio">Todavía no trabajó ningún agente hoy.</p>'}
 </body></html>`;
 }
 
-// Leer todos los transcripts del día (los de WSL por \\wsl.localhost) tarda: se rehace como mucho cada 2 minutos.
+// Leer todos los transcripts del día (los de WSL por \\wsl.localhost) tarda: se rehace como mucho cada 2 minutos, en
+// segundo plano. Mientras se rehace se sirve el anterior (salvo que sea de otro día), así nadie espera ni se traba.
 const VIGENCIA_MS = 2 * 60_000;
-let cache: { hecho: number; resumen: ResumenProyecto[]; html: string } | null = null;
+type Vigente = { hecho: number; desde: number; resumen: ResumenProyecto[]; html: string };
+let cache: Vigente | null = null;
+let enCurso: Promise<Vigente> | null = null;
 
-function resumenVigente(ahora = Date.now()): { resumen: ResumenProyecto[]; html: string } {
-  if (!cache || ahora - cache.hecho > VIGENCIA_MS) {
-    const resumen = resumirDia(trabajosDeHoy());
-    cache = { hecho: ahora, resumen, html: htmlHoy(resumen) };
+async function resumenVigente(ahora = Date.now()): Promise<Vigente> {
+  const desde = inicioDeHoy(new Date(ahora));
+  const vencido = !cache || cache.desde !== desde || ahora - cache.hecho > VIGENCIA_MS;
+  if (vencido && !enCurso) {
+    enCurso = trabajosDeHoyAsync(undefined, desde)
+      .then((trabajos) => {
+        const resumen = resumirDia(trabajos);
+        cache = { hecho: Date.now(), desde, resumen, html: htmlHoy(resumen) };
+        return cache;
+      })
+      .finally(() => {
+        enCurso = null;
+      });
   }
-  return cache;
+  if (cache && cache.desde === desde) return cache;
+  return enCurso ?? (cache as Vigente);
 }
 
 /** Sin cupo por cuenta: hasta cuándo (segundos epoch; 0 = sin hora de vuelta), o null si esa cuenta tiene cupo. */
@@ -384,12 +493,12 @@ export function registrarHoy(
     !!token && (new URL(url, 'http://localhost').searchParams.get('token') ?? '') === token;
   app.get('/hoy', async (request, reply) => {
     if (!conToken(request.url)) return reply.code(403).send('Falta el token de la oficina.');
-    return reply.type('text/html; charset=utf-8').send(resumenVigente().html);
+    return reply.type('text/html; charset=utf-8').send((await resumenVigente()).html);
   });
   app.get('/hoy.json', async (request, reply) => {
     if (!conToken(request.url))
       return reply.code(403).send({ error: 'Falta el token de la oficina.' });
-    return reply.send(jsonHoy(resumenVigente().resumen, cupo()));
+    return reply.send(jsonHoy((await resumenVigente()).resumen, cupo()));
   });
   app.get('/pizarra', async (request, reply) => {
     if (!conToken(request.url))
