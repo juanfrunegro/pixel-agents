@@ -3,6 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { esSalaComun, SALAS_COMUNES } from '../../core/src/salasComunes.js';
 import {
   asignacion,
   generarLayout,
@@ -10,6 +11,148 @@ import {
   salasDesde,
 } from '../src/personal/oficina.js';
 import { proyectoDe, setReglasExtra } from '../src/personal/personal.js';
+
+interface Mueble {
+  uid: string;
+  type: string;
+  col: number;
+  row: number;
+}
+
+const DIR_MUEBLES = path.join(__dirname, '..', '..', 'webview-ui', 'public', 'assets', 'furniture');
+
+interface Huella {
+  w: number;
+  h: number;
+  bg: number;
+  silla: boolean;
+}
+
+/** Huellas de los muebles leídas de los manifest (como el catálogo del webview), por id de asset. */
+const HUELLAS: Map<string, Huella> = (() => {
+  const m = new Map<string, Huella>();
+  type Nodo = {
+    id?: string;
+    type?: string;
+    category?: string;
+    footprintW?: number;
+    footprintH?: number;
+    backgroundTiles?: number;
+    members?: Nodo[];
+  };
+  const recorrer = (n: Nodo, bg: number, silla: boolean) => {
+    const b = n.backgroundTiles ?? bg;
+    const s = n.category ? n.category === 'chairs' : silla;
+    if (n.members) for (const x of n.members) recorrer(x, b, s);
+    else if (n.id && n.footprintW && n.footprintH)
+      m.set(n.id, { w: n.footprintW, h: n.footprintH, bg: b, silla: s });
+  };
+  for (const d of fs.readdirSync(DIR_MUEBLES)) {
+    const f = path.join(DIR_MUEBLES, d, 'manifest.json');
+    if (fs.existsSync(f)) recorrer(JSON.parse(fs.readFileSync(f, 'utf8')) as Nodo, 0, false);
+  }
+  return m;
+})();
+
+const huella = (tipo: string): Huella => {
+  const h = HUELLAS.get(tipo.split(':')[0]);
+  if (!h) throw new Error(`mueble sin manifest: ${tipo}`);
+  return h;
+};
+
+function areaDe(l: Record<string, unknown>, col: number, row: number): string | null {
+  return (l.areaTiles as Array<string | null>)[row * (l.cols as number) + col] ?? null;
+}
+
+/** Tiles ocupados por muebles (sin las filas de fondo), como getBlockedTiles del webview. */
+function bloqueados(l: Record<string, unknown>): Set<string> {
+  const b = new Set<string>();
+  for (const f of l.furniture as Mueble[]) {
+    const h = huella(f.type);
+    for (let dr = h.bg; dr < h.h; dr++)
+      for (let dc = 0; dc < h.w; dc++) b.add(`${f.col + dc},${f.row + dr}`);
+  }
+  return b;
+}
+
+function asientos(l: Record<string, unknown>): Array<{ uid: string; col: number; row: number }> {
+  const out: Array<{ uid: string; col: number; row: number }> = [];
+  for (const f of l.furniture as Mueble[]) {
+    const h = huella(f.type);
+    if (!h.silla) continue;
+    for (let dr = h.bg; dr < h.h; dr++)
+      for (let dc = 0; dc < h.w; dc++) out.push({ uid: f.uid, col: f.col + dc, row: f.row + dr });
+  }
+  return out;
+}
+
+/** Tiles a los que se llega caminando desde `desde` (piso, sin muebles). */
+function caminables(
+  l: Record<string, unknown>,
+  desde: { col: number; row: number } | null,
+): Set<string> {
+  const cols = l.cols as number;
+  const rows = l.rows as number;
+  const tiles = l.tiles as number[];
+  const b = bloqueados(l);
+  const ok = (c: number, r: number) =>
+    c >= 0 &&
+    r >= 0 &&
+    c < cols &&
+    r < rows &&
+    tiles[r * cols + c] !== 255 &&
+    tiles[r * cols + c] !== 0 &&
+    !b.has(`${c},${r}`);
+  const vistos = new Set<string>();
+  if (!desde || !ok(desde.col, desde.row)) return vistos;
+  const cola = [desde];
+  vistos.add(`${desde.col},${desde.row}`);
+  while (cola.length) {
+    const { col, row } = cola.shift()!;
+    for (const [dc, dr] of [
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+    ]) {
+      const c = col + dc;
+      const r = row + dr;
+      const k = `${c},${r}`;
+      if (!vistos.has(k) && ok(c, r)) {
+        vistos.add(k);
+        cola.push({ col: c, row: r });
+      }
+    }
+  }
+  return vistos;
+}
+
+/** Un tile libre de la sala (el de más abajo a la izquierda), o null. */
+function oficinaDe(l: Record<string, unknown>, sala: string): { col: number; row: number } | null {
+  const cols = l.cols as number;
+  const b = bloqueados(l);
+  const areas = l.areaTiles as Array<string | null>;
+  for (let i = areas.length - 1; i >= 0; i--) {
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    if (areas[i] === sala && !b.has(`${col},${row}`)) return { col, row };
+  }
+  return null;
+}
+
+function centroDe(l: Record<string, unknown>, sala: string): { col: number; row: number } {
+  const cols = l.cols as number;
+  let n = 0;
+  let sc = 0;
+  let sr = 0;
+  (l.areaTiles as Array<string | null>).forEach((a, i) => {
+    if (a !== sala) return;
+    n++;
+    sc += i % cols;
+    sr += Math.floor(i / cols);
+  });
+  return { col: sc / n, row: sr / n };
+}
 
 const ORCA = [
   {
@@ -82,45 +225,123 @@ describe('personal: oficina según los proyectos de Orca', () => {
     expect(a.ERP).toEqual(['ERP']);
   });
 
-  it('el plano tiene una sala por proyecto y los asientos de una sala no cambian de uid al sumar otra', () => {
-    const seis = generarLayout(plano, salasDesde(ORCA.slice(0, 5)).salas);
-    const ocho = generarLayout(plano, salasDesde(ORCA).salas);
-    expect(ocho.cols).toBe(3 * 18); // sala original (11) + anexo (6) + pared
-    expect(ocho.rows).toBe(1 + 3 * 12 + 1);
-    const uids = (l: Record<string, unknown>) =>
-      new Set((l.furniture as Array<{ uid: string }>).map((f) => f.uid));
-    for (const uid of uids(seis)) expect(uids(ocho).has(uid)).toBe(true);
-    const tiles = ocho.tiles as number[];
-    // Sin franjas de piso fuera de las salas: la fila de margen es vacío (255), no piso.
-    expect(tiles.slice(0, 54).every((t) => t === 255)).toBe(true);
-    const areas = new Set((ocho.areaTiles as Array<string | null>).filter(Boolean));
+  it('el plano tiene una oficina por proyecto, el Brain y las salas compartidas, y entra en una pantalla', () => {
+    const l = generarLayout(plano, salasDesde(ORCA).salas);
+    const areas = new Set((l.areaTiles as Array<string | null>).filter(Boolean));
     expect(areas).toEqual(
-      new Set(['Brain', 'Chaina', 'Poker', 'Finanzas', 'ERP', 'QF', 'Trading Bot', 'Otros']),
+      new Set([
+        'Brain',
+        'Chaina',
+        'Poker',
+        'Finanzas',
+        'ERP',
+        'QF',
+        'Trading Bot',
+        'Otros',
+        ...SALAS_COMUNES,
+      ]),
     );
+    // 1920x1080 con zoom 2 (32 px por tile), dejando lugar para la barra de abajo.
+    expect(l.cols as number).toBeLessThanOrEqual(60);
+    expect(l.rows as number).toBeLessThanOrEqual(30);
+    // El Brain está en el medio: su centro cae en el tercio central del plano, en las dos direcciones.
+    const c = centroDe(l, 'Brain');
+    expect(c.col / (l.cols as number)).toBeGreaterThan(1 / 3);
+    expect(c.col / (l.cols as number)).toBeLessThan(2 / 3);
+    expect(c.row / (l.rows as number)).toBeGreaterThan(1 / 3);
+    expect(c.row / (l.rows as number)).toBeLessThan(2 / 3);
+    // Sin anexos: ninguna oficina de proyecto tiene bibliotecas, atriles ni pizarrones.
+    const muebles = l.furniture as Mueble[];
+    const enOficinas = muebles.filter((f) => !esSalaComun(areaDe(l, f.col, f.row + 2)));
+    expect(
+      enOficinas.filter((f) => /BOOKSHELF|EASEL|WHITEBOARD/.test(f.type)).map((f) => f.uid),
+    ).toEqual([]);
+    // La mesa contable está en Finanzas, y solo ahí.
+    const mesas = muebles.filter((f) => f.type === 'MESA_CONTABLE');
+    expect(mesas.map((f) => areaDe(l, f.col, f.row + 1))).toEqual(['Finanzas']);
   });
 
-  it('cada sala tiene un anexo con biblioteca y pizarrón, sin puestos, al que se entra por la puerta', () => {
-    const l = generarLayout(plano, salasDesde(ORCA.slice(0, 1)).salas);
-    const cols = l.cols as number;
-    const tiles = l.tiles as number[];
-    const muebles = l.furniture as Array<{ uid: string; type: string; col: number; row: number }>;
-    const anexo = muebles.filter((f) => f.uid.startsWith('anexo-'));
-    expect(anexo.map((f) => f.type)).toEqual(
-      expect.arrayContaining(['DOUBLE_BOOKSHELF', 'WHITEBOARD', 'EASEL', 'MESA_CONTABLE']),
+  it('desde cada oficina se llega caminando al Brain y a cada sala compartida, y a todos sus asientos', () => {
+    const l = generarLayout(plano, salasDesde(ORCA).salas);
+    const alcanzable = caminables(l, oficinaDe(l, 'Chaina'));
+    const salas = new Set<string>();
+    for (const k of alcanzable) {
+      const [col, row] = k.split(',').map(Number);
+      const a = areaDe(l, col, row);
+      if (a) salas.add(a);
+    }
+    expect([...salas].sort()).toEqual(
+      [
+        'Brain',
+        'Chaina',
+        'Poker',
+        'Finanzas',
+        'ERP',
+        'QF',
+        'Trading Bot',
+        'Otros',
+        ...SALAS_COMUNES,
+      ].sort(),
     );
-    expect(anexo.some((f) => /CHAIR|BENCH/.test(f.type))).toBe(false);
-    // Fila 0 = margen; la sala arranca en la fila 1 (fila 9 del plano original).
-    const en = (c: number, filaOriginal: number) => tiles[(filaOriginal - 8) * cols + c];
-    expect(en(10, 15)).not.toBe(0); // puerta en la pared del medio
-    expect(en(10, 12)).toBe(0); // el resto de esa pared sigue
-    expect(en(13, 15)).toBe(en(1, 15)); // piso del anexo = piso de la sala
-    expect(en(17, 15)).toBe(0); // pared derecha del anexo
-    expect(en(13, 10)).toBe(0); // pared de arriba del anexo
-    const areas = l.areaTiles as Array<string | null>;
-    expect(areas[(15 - 8) * cols + 13]).toBe('ERP');
+    // Cada asiento tiene al lado un tile al que se llega (para sentarse).
+    for (const s of asientos(l)) {
+      const vecinos = [
+        [s.col + 1, s.row],
+        [s.col - 1, s.row],
+        [s.col, s.row + 1],
+        [s.col, s.row - 1],
+      ];
+      expect(
+        vecinos.some(([c, r]) => alcanzable.has(`${c},${r}`)),
+        `asiento ${s.uid} en ${s.col},${s.row}`,
+      ).toBe(true);
+    }
   });
 
-  it('los muebles nuevos del anexo existen como assets (manifest y png del mismo tamaño)', () => {
+  it('cada oficina tiene sus puestos y las compartidas tienen lugar de sobra', () => {
+    const l = generarLayout(plano, salasDesde(ORCA).salas);
+    const por = new Map<string, number>();
+    for (const s of asientos(l)) {
+      const a = areaDe(l, s.col, s.row) ?? '?';
+      por.set(a, (por.get(a) ?? 0) + 1);
+    }
+    expect(por.get('Chaina')).toBe(6);
+    expect(por.get('ERP')).toBe(6);
+    expect(por.get('Brain')).toBe(6);
+    expect(por.get('Finanzas')).toBe(5); // un escritorio menos: la mesa contable
+    expect(por.get('Cafetería')).toBeGreaterThanOrEqual(12);
+    expect(por.get('Reuniones')).toBe(8);
+    expect(por.get('Biblioteca') ?? 0).toBe(0);
+  });
+
+  it('con más de 7 proyectos agrega una franja de oficinas abajo, y con pocos no deja huecos', () => {
+    const muchos = [
+      ...ORCA,
+      ...['Uno', 'Dos', 'Tres'].map((n) => ({ nombre: n, ruta: `C:\\x\\${n}` })),
+    ];
+    const l = generarLayout(plano, salasDesde(muchos).salas);
+    expect(oficinaDe(l, 'Tres')).not.toBeNull();
+    expect(l.rows as number).toBeGreaterThan(30);
+    const pocos = generarLayout(plano, salasDesde(ORCA.slice(0, 2)).salas);
+    expect(new Set((pocos.areaTiles as Array<string | null>).filter(Boolean))).toEqual(
+      new Set(['ERP', 'Chaina', 'Otros', 'Brain', ...SALAS_COMUNES]),
+    );
+    expect(caminables(pocos, oficinaDe(pocos, 'ERP')).size).toBeGreaterThan(100);
+  });
+
+  it('los asientos de una sala no cambian de uid al sumar otro proyecto', () => {
+    const uids = (l: Record<string, unknown>) =>
+      new Set((l.furniture as Mueble[]).map((f) => f.uid));
+    const antes = uids(generarLayout(plano, salasDesde(ORCA.slice(0, 5)).salas));
+    const despues = uids(generarLayout(plano, salasDesde(ORCA).salas));
+    for (const uid of antes) expect(despues.has(uid)).toBe(true);
+    const todos = (generarLayout(plano, salasDesde(ORCA).salas).furniture as Mueble[]).map(
+      (f) => f.uid,
+    );
+    expect(new Set(todos).size).toBe(todos.length);
+  });
+
+  it('los muebles propios (atril, mesa contable) existen como assets (manifest y png del mismo tamaño)', () => {
     const dir = path.join(__dirname, '..', '..', 'webview-ui', 'public', 'assets', 'furniture');
     for (const id of ['EASEL', 'MESA_CONTABLE']) {
       const m = JSON.parse(fs.readFileSync(path.join(dir, id, 'manifest.json'), 'utf8')) as {
