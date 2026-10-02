@@ -151,7 +151,15 @@ async function main(): Promise<void> {
     const runtime = new AgentRuntime(store, claudeProvider);
     setFolderNameResolver(proyectoDe); // personal: cada agente cae en el área de su proyecto (Orca y WSL incluidos)
     cargarReglasOrca(); // personal: proyectos nuevos de Orca → su sala
-    setInterval(() => revisarSenales(store), 2000).unref(); // personal: aviso por voz y deploys vencidos
+    // personal: aviso por voz y deploys vencidos. Un error acá no puede tirar el server (una excepción en un timer
+    // termina el proceso de Node y la pestaña quedaba en "Reconnecting…").
+    setInterval(() => {
+      try {
+        revisarSenales(store);
+      } catch (err) {
+        console.error('[Pixel Agents] revisarSenales:', err);
+      }
+    }, 2000).unref();
     limpiarVozVieja(); // personal: interruptores de voz de sesiones de hace días
     cargarSkins(distRoot); // personal: skins de Marvel (solo estética)
 

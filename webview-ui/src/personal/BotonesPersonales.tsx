@@ -96,7 +96,7 @@ export function BotonesPersonales() {
   if (apagado) {
     return (
       <span className="pixel-panel px-8 py-4" style={{ fontSize: '18px' }}>
-        Pixel apagado. Se vuelve a abrir solo cuando arranque un agente.
+        Pixel apagado. Prendelo con «Prender», arriba, o se prende solo con el próximo agente.
       </span>
     );
   }
