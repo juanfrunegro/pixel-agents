@@ -13,6 +13,7 @@ import {
 } from './configPersistence.js';
 import { HUE_SHIFT_MAX_DEG, PALETTE_COUNT } from './constants.js';
 import { readLayoutFromFile, writeLayoutToFile } from './layoutPersistence.js';
+import { abrirProyecto } from './personal/abrir.js';
 import { recargarOficina } from './personal/oficina.js';
 import { guardarNombre, mensajeNombres } from './personal/personal.js';
 import type { ConsentEffects } from './providers/hook/consentExecutor.js';
@@ -301,6 +302,19 @@ export function handleClientMessage(
         console.error('[Pixel Agents] No se pudo recargar la oficina:', err);
         send({ type: 'oficinaRecargada', error: String(err) });
       }
+      break;
+    }
+
+    case 'abrirProyecto': {
+      // Clic en una oficina: abrir su carpeta o VS Code. La ruta sale de Orca, nunca del cliente.
+      if (!ctx.privileged) break;
+      const error = abrirProyecto(msg.sala, msg.accion);
+      send({
+        type: 'proyectoAbierto',
+        sala: msg.sala,
+        accion: msg.accion,
+        ...(error ? { error } : {}),
+      });
       break;
     }
 

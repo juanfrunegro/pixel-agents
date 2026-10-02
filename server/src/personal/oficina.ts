@@ -10,6 +10,7 @@ import * as os from 'os';
 import * as path from 'path';
 
 import {
+  ESCENARIO_FILA,
   esSalaComun,
   SALA_BIBLIOTECA,
   SALA_CAFETERIA,
@@ -92,6 +93,21 @@ const bonito = (s: string): string => {
   return t ? t[0].toUpperCase() + t.slice(1) : t;
 };
 
+/** Sala de un proyecto de Orca: su nombre de siempre si es conocido (Chaina, Poker, ERP…) o su nombre en Orca. */
+export function salaDeProyecto(p: ProyectoOrca): string {
+  return proyectoDe({ cwd: p.ruta }, false) ?? bonito(p.nombre);
+}
+
+/** Proyecto de Orca de cada sala (el primero, si dos caen en la misma). */
+export function proyectosPorSala(proyectos = leerProyectosOrca()): Map<string, ProyectoOrca> {
+  const m = new Map<string, ProyectoOrca>();
+  for (const p of proyectos) {
+    const sala = salaDeProyecto(p);
+    if (sala && sala !== 'Otros' && !m.has(sala)) m.set(sala, p);
+  }
+  return m;
+}
+
 /**
  * Salas a partir de los proyectos de Orca. Un proyecto conocido usa su nombre de siempre (Chaina, Poker, ERP…); uno
  * nuevo, su nombre en Orca. Devuelve también las reglas carpeta → sala de los proyectos nuevos, para que sus agentes
@@ -105,7 +121,7 @@ export function salasDesde(proyectos: ProyectoOrca[]): {
   const reglas: Array<[string, string]> = [];
   for (const p of proyectos) {
     const conocido = proyectoDe({ cwd: p.ruta }, false);
-    const nombre = conocido ?? bonito(p.nombre);
+    const nombre = salaDeProyecto(p);
     if (!nombre || nombre === 'Otros') continue;
     if (!conocido) {
       const clave = normalizarCarpeta(path.win32.basename(p.ruta.replace(/[\\/]+$/, '')));
@@ -243,7 +259,14 @@ function brain(): Contenido {
   m.push({ id: 'planta-grande', type: 'LARGE_PLANT', dx: 16, dy: 0 });
   m.push({ id: 'cuadro', type: 'LARGE_PAINTING', dx: 17, dy: PARED_ARRIBA });
   m.push({ id: 'reloj', type: 'CLOCK', dx: 13, dy: PARED_ARRIBA });
-  m.push({ id: 'planta-colgante', type: 'HANGING_PLANT', dx: 4, dy: PARED_ARRIBA });
+  // La pizarra de pendientes (tres pizarrones juntos; el webview escribe encima, ver webview-ui/src/personal/pizarra.ts).
+  for (const [n, dx] of [
+    [1, 2],
+    [2, 4],
+    [3, 6],
+  ] as const) {
+    m.push({ id: `pizarra-${n}`, type: 'WHITEBOARD', dx, dy: PARED_ARRIBA });
+  }
   return { muebles: m, puertas: [1, 15] };
 }
 
@@ -319,19 +342,20 @@ function cafeteria(): Contenido {
 }
 
 /**
- * Presentaciones: pantalla (pizarrón, a un costado para que el nombre de la sala se lea) y dos filas de sillas. Se
- * "prende" en la tanda 2.
+ * Presentaciones: dos pantallas (pizarrones) a los costados de la pared, con el nombre de la sala en el medio; el
+ * escenario libre en el centro (quien presenta se para en la fila ESCENARIO_FILA, mirando al público, con su tarjeta
+ * dentro de la sala) y una fila de sillas abajo mirando hacia adelante. Se "prende" con el aviso por voz.
  */
 function presentaciones(): Contenido {
   const m: MuebleRelativo[] = [];
-  m.push({ id: 'pantalla-1', type: 'WHITEBOARD', dx: 1, dy: PARED_ARRIBA });
-  for (const dy of [2, 4]) {
-    for (const dx of [1, 2, 3, 5, 6, 7]) {
-      m.push({ id: `silla-${dy}-${dx}`, type: 'WOODEN_CHAIR_BACK', dx, dy });
-    }
+  m.push({ id: 'pantalla-1', type: 'WHITEBOARD', dx: 0, dy: PARED_ARRIBA });
+  m.push({ id: 'pantalla-2', type: 'WHITEBOARD', dx: 7, dy: PARED_ARRIBA });
+  // Una fila de sillas (el respaldo ocupa la fila de arriba del asiento): el público se sienta en la última fila.
+  const dy = ESCENARIO_FILA + 2;
+  for (const dx of [0, 1, 2, 3, 5, 6, 7, 8]) {
+    m.push({ id: `silla-${dy}-${dx}`, type: 'WOODEN_CHAIR_BACK', dx, dy });
   }
-  m.push({ id: 'planta-colgante', type: 'HANGING_PLANT', dx: 8, dy: PARED_ARRIBA });
-  return { muebles: m, puertas: [0, 4] };
+  return { muebles: m, puertas: [3, 5] };
 }
 
 function contenido(p: Pieza): Contenido {

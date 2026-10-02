@@ -250,9 +250,12 @@ describe('personal: oficina según los proyectos de Orca', () => {
     expect(c.col / (l.cols as number)).toBeLessThan(2 / 3);
     expect(c.row / (l.rows as number)).toBeGreaterThan(1 / 3);
     expect(c.row / (l.rows as number)).toBeLessThan(2 / 3);
-    // Sin anexos: ninguna oficina de proyecto tiene bibliotecas, atriles ni pizarrones.
+    // Sin anexos: ninguna oficina de proyecto tiene bibliotecas, atriles ni pizarrones (salvo la pizarra de pendientes
+    // del Brain, que no es un lugar de trabajo).
     const muebles = l.furniture as Mueble[];
-    const enOficinas = muebles.filter((f) => !esSalaComun(areaDe(l, f.col, f.row + 2)));
+    const enOficinas = muebles.filter(
+      (f) => !esSalaComun(areaDe(l, f.col, f.row + 2)) && !f.uid.startsWith('brain-pizarra'),
+    );
     expect(
       enOficinas.filter((f) => /BOOKSHELF|EASEL|WHITEBOARD/.test(f.type)).map((f) => f.uid),
     ).toEqual([]);

@@ -9,6 +9,12 @@ export const SALA_CAFETERIA = 'Cafetería';
 export const SALA_REUNIONES = 'Reuniones';
 export const SALA_PRESENTACIONES = 'Presentaciones';
 
+/**
+ * Escenario de Presentaciones: fila (contada desde la primera fila de piso de la sala) donde se para quien presenta.
+ * Lo bastante lejos de la pared para que su tarjeta quede dentro de la sala; las sillas del público van más abajo.
+ */
+export const ESCENARIO_FILA = 3;
+
 export const SALAS_COMUNES: readonly string[] = [
   SALA_DISENO,
   SALA_BIBLIOTECA,

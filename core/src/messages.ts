@@ -41,7 +41,8 @@ export type ServerMessage =
   | AgentDiagnostics
   | AgentInfo
   | AgentNamesLoaded
-  | OficinaRecargada;
+  | OficinaRecargada
+  | ProyectoAbierto;
 
 export type ClientMessage =
   | WebviewReady
@@ -68,7 +69,8 @@ export type ClientMessage =
   | RequestDiagnostics
   | RenameAgent
   | ShutdownServer
-  | RecargarOficina;
+  | RecargarOficina
+  | AbrirProyecto;
 
 export interface ProviderCapabilities {
   type: 'providerCapabilities';
@@ -326,6 +328,13 @@ export interface AgentInfo {
   id: number;
   model?: string;
   costUsd?: number;
+  dormidoHasta?: number | null;
+  wsl?: boolean;
+  errores?: number;
+  ultimoError?: number | null;
+  deployDesde?: number | null;
+  voz?: boolean;
+  presento?: number | null;
 }
 
 export interface AgentNamesLoaded {
@@ -340,6 +349,13 @@ export interface OficinaRecargada {
   type: 'oficinaRecargada';
   salas?: string[];
   puestos?: number;
+  error?: string;
+}
+
+export interface ProyectoAbierto {
+  type: 'proyectoAbierto';
+  sala: string;
+  accion: string;
   error?: string;
 }
 
@@ -471,3 +487,11 @@ export interface ShutdownServer {
 export interface RecargarOficina {
   type: 'recargarOficina';
 }
+
+export interface AbrirProyecto {
+  type: 'abrirProyecto';
+  sala: string;
+  accion: AnonymousSchema_272;
+}
+
+export type AnonymousSchema_272 = 'carpeta' | 'vscode';

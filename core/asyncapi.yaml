@@ -122,6 +122,7 @@ components:
         - $ref: '#/components/schemas/AgentInfo'
         - $ref: '#/components/schemas/AgentNamesLoaded'
         - $ref: '#/components/schemas/OficinaRecargada'
+        - $ref: '#/components/schemas/ProyectoAbierto'
       discriminator: type
 
     ClientMessage:
@@ -152,12 +153,15 @@ components:
         - $ref: '#/components/schemas/RenameAgent'
         - $ref: '#/components/schemas/ShutdownServer'
         - $ref: '#/components/schemas/RecargarOficina'
+        - $ref: '#/components/schemas/AbrirProyecto'
       discriminator: type
 
     # ── Personal (copia de juanfrunegro) ──────────────────────────
 
     AgentInfo:
-      description: Modelo y costo equivalente (a precio de API) de una sesión, leídos de su transcript.
+      description: >-
+        Lo que se lee del transcript de una sesión: modelo, costo equivalente (a precio de API), si se quedó sin
+        tokens, si corre en WSL y sus señales (humo por errores seguidos, deploy en curso, aviso por voz).
       type: object
       additionalProperties: false
       required: [type, id]
@@ -170,6 +174,28 @@ components:
           type: string
         costUsd:
           type: number
+        dormidoHasta:
+          description: >-
+            Se quedó sin tokens (rate_limit): hora de vuelta en segundos epoch; 0 = sin hora conocida; null = despierto.
+          type: [number, 'null']
+        wsl:
+          description: La sesión corre en WSL (otra cuenta); su transcript se lee desde Windows por \\wsl.localhost.
+          type: boolean
+        errores:
+          description: Resultados de herramienta con error seguidos (3 o más = humo).
+          type: integer
+        ultimoError:
+          description: Cuándo fue el último error (ms epoch); el humo vence a los 15 min sin errores nuevos.
+          type: [number, 'null']
+        deployDesde:
+          description: Desde cuándo corre un comando de deploy (ms epoch); null = no está deployando.
+          type: [number, 'null']
+        voz:
+          description: Pidió el aviso por voz y todavía no se dijo (marca <sesión>.speak).
+          type: boolean
+        presento:
+          description: Cuándo se dijo su último aviso por voz (ms epoch); null = nunca.
+          type: [number, 'null']
 
     AgentNamesLoaded:
       description: Nombres de fantasía (~/.claude/agents/nombres.json).
@@ -225,6 +251,37 @@ components:
       properties:
         type:
           const: recargarOficina
+
+    AbrirProyecto:
+      description: >-
+        Clic en una oficina de proyecto: abrir su carpeta o abrirlo en VS Code. Solo el nombre de la sala; la ruta sale
+        de la lista de proyectos de Orca en el servidor (nunca del cliente). Solo conexiones con token.
+      type: object
+      additionalProperties: false
+      required: [type, sala, accion]
+      properties:
+        type:
+          const: abrirProyecto
+        sala:
+          type: string
+        accion:
+          type: string
+          enum: [carpeta, vscode]
+
+    ProyectoAbierto:
+      description: Resultado de abrirProyecto (error = no se pudo).
+      type: object
+      additionalProperties: false
+      required: [type, sala, accion]
+      properties:
+        type:
+          const: proyectoAbierto
+        sala:
+          type: string
+        accion:
+          type: string
+        error:
+          type: string
 
     OficinaRecargada:
       description: Resultado de recargarOficina. Los clientes recargan la página para tomar el plano nuevo.

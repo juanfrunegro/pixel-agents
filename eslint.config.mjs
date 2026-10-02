@@ -41,6 +41,7 @@ export default [
     files: [
       'adapters/vscode/constants.ts',
       'server/src/personal/organigrama.ts',
+      'server/src/personal/hoy.ts',
       'server/src/personal/oficina.ts', // colores de las salas: datos del plano, no estilos
       'server/__tests__/oficina.test.ts',
     ],
