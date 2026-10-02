@@ -2,6 +2,7 @@ import { EventEmitter } from 'node:events';
 import { appendFileSync } from 'node:fs';
 
 import type { StateAdapter } from '../../core/src/adapter.js';
+import { olvidarModo } from './personal/permiso.js';
 import type { AgentState, PersistedAgent } from './types.js';
 
 /**
@@ -120,6 +121,8 @@ export class AgentStateStore {
   }
 
   delete(id: number): boolean {
+    const quien = this.agents.get(id);
+    if (quien) olvidarModo(quien.jsonlFile); // personal: personal/permiso.ts
     const existed = this.agents.delete(id);
     if (existed) {
       this.emitter.emit('agentRemoved', id);

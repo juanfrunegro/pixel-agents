@@ -4,6 +4,7 @@ import type { HookProvider } from '../../core/src/provider.js';
 import type { AgentStateStore } from './agentStateStore.js';
 import { TEXT_IDLE_DELAY_MS, TOOL_DONE_DELAY_MS } from './constants.js';
 import { updateContextUsage } from './contextUsage.js';
+import { anotarModoPermiso } from './personal/permiso.js';
 import { hasInlineTeammates, hasPromotedBackgroundAgent } from './teamUtils.js';
 import {
   cancelPermissionTimer,
@@ -103,6 +104,7 @@ export function processTranscriptLine(
   agent.linesProcessed++;
   try {
     const record = JSON.parse(line);
+    anotarModoPermiso(agent.jsonlFile, record); // personal: mano levantada solo si la sesión puede pedir permiso
 
     // -- Agent Teams: extract team metadata via the active provider --
     // The provider reads its CLI's own field names (Claude: record.teamName + record.agentName).

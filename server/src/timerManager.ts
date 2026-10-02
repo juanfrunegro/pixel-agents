@@ -1,5 +1,6 @@
 import type { AgentStateStore } from './agentStateStore.js';
 import { PERMISSION_TIMER_DELAY_MS } from './constants.js';
+import { exentasPara, modoDe } from './personal/permiso.js';
 import { hasPromotedBackgroundAgent } from './teamUtils.js';
 import type { AgentState } from './types.js';
 
@@ -112,6 +113,13 @@ export function startPermissionTimer(
   permissionExemptTools: ReadonlySet<string>,
 ): void {
   cancelPermissionTimer(agentId, permissionTimers);
+  // personal: según el permissionMode de la sesión (personal/permiso.ts) no hay mano por tiempo en
+  // bypass/auto, y en acceptEdits las ediciones no cuentan
+  const sesion = agents.get(agentId);
+  const exentas = sesion
+    ? exentasPara(modoDe(sesion.jsonlFile), permissionExemptTools)
+    : permissionExemptTools;
+  if (!exentas) return;
   const timer = setTimeout(() => {
     permissionTimers.delete(agentId);
     const agent = agents.get(agentId);
@@ -121,7 +129,7 @@ export function startPermissionTimer(
     let hasNonExempt = false;
     for (const toolId of agent.activeToolIds) {
       const toolName = agent.activeToolNames.get(toolId);
-      if (!permissionExemptTools.has(toolName || '')) {
+      if (!exentas.has(toolName || '')) {
         hasNonExempt = true;
         break;
       }
@@ -131,7 +139,7 @@ export function startPermissionTimer(
     const stuckSubagentParentToolIds: string[] = [];
     for (const [parentToolId, subToolNames] of agent.activeSubagentToolNames) {
       for (const [, toolName] of subToolNames) {
-        if (!permissionExemptTools.has(toolName)) {
+        if (!exentas.has(toolName)) {
           stuckSubagentParentToolIds.push(parentToolId);
           hasNonExempt = true;
           break;
