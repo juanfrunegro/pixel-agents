@@ -11,7 +11,7 @@ import { getCatalogEntry } from '../office/layout/furnitureCatalog.js';
 import { isWalkable } from '../office/layout/tileMap.js';
 import type { Character } from '../office/types.js';
 import { CharacterState } from '../office/types.js';
-import { actividadDe, elegirPunto, type Punto, puntosDeLugares } from './lugares.js';
+import { actividadDe, elegirPunto, type Lugar, type Punto, puntosDeLugares } from './lugares.js';
 import { dormidoDe, padreDe, statusDe } from './personal.js';
 
 export const PERMANENCIA_MS = 5000;
@@ -47,9 +47,9 @@ export function moverSegunActividad(os: OfficeState, ch: Character, ahora: numbe
   const padre = padreDe(ch.id);
   const proyecto =
     ch.folderName ?? (padre !== null ? os.characters.get(padre)?.folderName : undefined);
-  const deseado = ch.currentTool
+  const deseado: Lugar | null = ch.currentTool
     ? actividadDe(ch.currentTool, statusDe(ch.id), proyecto)
-    : (ch.lugar ?? null);
+    : ((ch.lugar as Lugar | null | undefined) ?? null);
   if (deseado === (ch.lugar ?? null)) return false;
   if (ch.lugarDesde !== undefined && ahora - ch.lugarDesde < PERMANENCIA_MS) return false;
   ch.lugar = deseado;
