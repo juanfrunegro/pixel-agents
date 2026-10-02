@@ -44,6 +44,10 @@ export function reunir(
 ): boolean {
   if (ids.length < 2 || new Set(ids).size !== ids.length) return false;
   if (ids.some((id) => reunionDe(id, ahora))) return false;
+  // los enfriamientos vencidos no hacen falta: que los mapas no crezcan todo el día
+  for (const [k, t] of ultimaPar) if (ahora - t >= ENFRIAR_PAR_MS) ultimaPar.delete(k);
+  for (const [k, t] of ultimaProyecto)
+    if (ahora - t >= ENFRIAR_PROYECTO_MS) ultimaProyecto.delete(k);
   const par = clavePar(ids);
   const antes = ultimaPar.get(par);
   if (antes !== undefined && ahora - antes < ENFRIAR_PAR_MS) return false;

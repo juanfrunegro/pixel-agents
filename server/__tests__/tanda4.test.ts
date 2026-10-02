@@ -18,6 +18,7 @@ import {
   exentasPara,
   modoDe,
   olvidarModo,
+  REINTENTO_MS,
   ultimoModo,
 } from '../src/personal/permiso.js';
 import { startPermissionTimer } from '../src/timerManager.js';
@@ -95,6 +96,18 @@ describe('mano levantada según permissionMode', () => {
     expect(ultimoModo(fs.readFileSync(f, 'utf8'))).toBe('auto');
     expect(modoDe(f)).toBe('auto');
     expect(modoDe(path.join(dir, 'no-existe.jsonl'))).toBeUndefined();
+  });
+
+  it('acepta JSON con espacios y, si todavía no hay dato, reintenta más tarde', () => {
+    expect(ultimoModo('{"type": "user", "permissionMode": "bypassPermissions"}')).toBe(
+      'bypassPermissions',
+    );
+    const f = path.join(dir, 'nueva.jsonl');
+    fs.writeFileSync(f, '{"type":"user"}\n');
+    expect(modoDe(f, 1_000)).toBeUndefined();
+    fs.appendFileSync(f, '{"type":"user","permissionMode":"auto"}\n');
+    expect(modoDe(f, 2_000)).toBeUndefined(); // dentro del intervalo no vuelve a leer
+    expect(modoDe(f, 1_000 + REINTENTO_MS)).toBe('auto');
   });
 
   function agente(jsonlFile: string, tool: string): AgentState {

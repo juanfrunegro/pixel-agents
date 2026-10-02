@@ -24,7 +24,9 @@ const EDICIONES = ['Edit', 'Write', 'MultiEdit', 'NotebookEdit'];
 const COLA_BYTES = 256 * 1024;
 
 const modos = new Map<string, string>();
-const leidos = new Set<string>();
+/** Archivo → cuándo se leyó su cola sin encontrar el modo (se reintenta pasado REINTENTO_MS). */
+const leidos = new Map<string, number>();
+export const REINTENTO_MS = 30_000;
 
 /** Se llama con cada registro del transcript. */
 export function anotarModoPermiso(jsonlFile: string, record: unknown): void {
@@ -34,18 +36,23 @@ export function anotarModoPermiso(jsonlFile: string, record: unknown): void {
 
 /** Último `permissionMode` que aparece en un texto de transcript (o undefined). */
 export function ultimoModo(texto: string): string | undefined {
-  const re = /"permissionMode":"([A-Za-z]+)"/g;
+  const re = /"permissionMode"\s*:\s*"([A-Za-z]+)"/g;
   let m: RegExpExecArray | null;
   let ultimo: string | undefined;
   while ((m = re.exec(texto))) ultimo = m[1];
   return ultimo;
 }
 
-/** Modo de la sesión; si todavía no se vio ninguna línea con el dato, lee una vez la cola del archivo. */
-export function modoDe(jsonlFile: string): string | undefined {
+/**
+ * Modo de la sesión. Si todavía no se vio ninguna línea con el dato, lee la cola del archivo (como mucho una vez cada
+ * REINTENTO_MS mientras no aparezca).
+ */
+export function modoDe(jsonlFile: string, ahora = Date.now()): string | undefined {
   const conocido = modos.get(jsonlFile);
-  if (conocido || leidos.has(jsonlFile)) return conocido;
-  leidos.add(jsonlFile);
+  if (conocido) return conocido;
+  const antes = leidos.get(jsonlFile);
+  if (antes !== undefined && ahora - antes < REINTENTO_MS) return undefined;
+  leidos.set(jsonlFile, ahora);
   try {
     const fd = fs.openSync(jsonlFile, 'r');
     try {
