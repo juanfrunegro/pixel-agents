@@ -1,7 +1,8 @@
 /**
  * Personal (copia de juanfrunegro): lo que se dibuja encima de los personajes además de las burbujas del original.
  * - "Zzz" cuando la sesión se quedó sin tokens (dormidoDe).
- * - Burbujas de diálogo cuando un agente lanza un sub-agente y cuando el sub-agente le devuelve el resultado.
+ * - Burbujas de diálogo en las reuniones (al lanzar un sub-agente, ver reuniones.ts) y cuando el sub-agente le devuelve
+ *   el resultado.
  * - Etiqueta "WSL" al costado de los agentes que corren en WSL (otra cuenta), para distinguirlos de un vistazo.
  * El original solo llama a renderBurbujasPersonales() después de sus propias burbujas.
  */
@@ -10,9 +11,9 @@ import {
   BUBBLE_VERTICAL_OFFSET_PX,
   CHARACTER_SITTING_OFFSET_PX,
 } from '../constants.js';
+import { estaSentado } from '../office/engine/characters.js';
 import { getCachedSprite } from '../office/sprites/spriteCache.js';
 import type { Character, SpriteData } from '../office/types.js';
-import { CharacterState } from '../office/types.js';
 import {
   COLOR_BURBUJA_BORDE,
   COLOR_BURBUJA_FONDO,
@@ -21,7 +22,9 @@ import {
   COLOR_WSL,
   COLOR_ZZZ,
 } from './colores.js';
+import { apagadoPorFiltro } from './filtro.js';
 import { dormidoDe, esWsl } from './personal.js';
+import { DURACION_SUB_MS, reunir } from './reuniones.js';
 
 const _ = '';
 const Z = COLOR_ZZZ;
@@ -104,9 +107,17 @@ export function _reiniciarConversaciones(): void {
   conversaciones = [];
 }
 
-/** Lanzó un sub-agente: el que lo lanza explica, el sub-agente contesta, y otra vez. */
+/** Turnos de una charla de dos: el primero explica, el otro contesta, y otra vez. */
+export function turnosDe(ids: number[]): number[] {
+  return [ids[0], ids[1], ids[0], ids[1]];
+}
+
+/**
+ * Lanzó un sub-agente: los dos van a Reuniones y hablan cuando llegan (ambiente.ts). Si el que lo lanza ya está en otra
+ * reunión (lanzó varios a la vez), hablan ahí mismo, como antes.
+ */
 export function alLanzarSub(padre: number, sub: number, ahora = Date.now()): void {
-  conversar([padre, sub, padre, sub], ahora);
+  if (!reunir([padre, sub], DURACION_SUB_MS, ahora)) conversar(turnosDe([padre, sub]), ahora);
 }
 
 /**
@@ -130,7 +141,8 @@ export function renderBurbujasPersonales(
   const quienes = hablando(ahora);
   for (const ch of characters) {
     if (ch.isGreeter) continue;
-    const sentado = ch.state === CharacterState.TYPE;
+    if (apagadoPorFiltro(ch.id)) continue; // filtro Windows/WSL: sin etiquetas ni burbujas propias
+    const sentado = estaSentado(ch);
     const sittingOff = sentado ? BUBBLE_SITTING_OFFSET_PX : 0;
     const cabezaY = ch.y + sittingOff - BUBBLE_VERTICAL_OFFSET_PX;
 

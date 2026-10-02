@@ -45,6 +45,7 @@ import {
   VOID_TILE_OUTLINE_COLOR,
 } from '../../constants.js';
 import { renderBurbujasPersonales } from '../../personal/burbujas.js';
+import { ALFA_APAGADO, apagadoPorFiltro } from '../../personal/filtro.js';
 import { colorModelo, modeloDe } from '../../personal/personal.js';
 import { getColorizedFloorSprite, hasFloorSprites, WALL_COLOR } from '../floorTiles.js';
 import { mapOffset } from '../projection.js';
@@ -71,9 +72,9 @@ import type {
   SpriteData,
   TileType as TileTypeVal,
 } from '../types.js';
-import { CharacterState, TILE_SIZE, TileType } from '../types.js';
+import { TILE_SIZE, TileType } from '../types.js';
 import { getWallInstances, hasWallSprites, wallColorToHex } from '../wallTiles.js';
-import { getCharacterSprite } from './characters.js';
+import { estaSentado, getCharacterSprite } from './characters.js';
 import { renderMatrixEffect } from './matrixEffect.js';
 import { getPetSpriteData } from './petEntity.js';
 
@@ -395,7 +396,7 @@ export function renderScene(
     const spriteData = getCharacterSprite(ch, sprites);
     const cached = getCachedSprite(spriteData, zoom);
     // Sitting offset: shift character down when seated so they visually sit in the chair
-    const sittingOffset = ch.state === CharacterState.TYPE ? CHARACTER_SITTING_OFFSET_PX : 0;
+    const sittingOffset = estaSentado(ch) ? CHARACTER_SITTING_OFFSET_PX : 0; // personal: parado no
     // Anchor at bottom-center of character — round to integer device pixels
     const drawX = Math.round(offsetX + ch.x * zoom - cached.width / 2);
     const drawY = Math.round(offsetY + (ch.y + sittingOffset) * zoom - cached.height);
@@ -407,7 +408,12 @@ export function renderScene(
 
     // Headless agents (adopted, no terminal to focus) render translucent while
     // the "Display headless as ghosts" setting is on.
-    const alpha = ch.isHeadless && ghostHeadlessAgents ? HEADLESS_CHARACTER_ALPHA : 1;
+    // personal: con el filtro Windows/WSL, los del otro sistema se ven apagados (sin color, medio transparentes)
+    const apagado = apagadoPorFiltro(ch.id);
+    const alpha =
+      (ch.isHeadless && ghostHeadlessAgents ? HEADLESS_CHARACTER_ALPHA : 1) *
+      (apagado ? ALFA_APAGADO : 1);
+    const filtroCss = apagado ? 'grayscale(1)' : 'none';
 
     // Matrix spawn/despawn effect — skip outline, use per-pixel rendering
     if (ch.matrixEffect) {
@@ -420,6 +426,7 @@ export function renderScene(
         draw: (c) => {
           c.save();
           c.globalAlpha = alpha;
+          c.filter = filtroCss;
           renderMatrixEffect(c, mCh, mSpriteData, mDrawX, mDrawY, zoom);
           c.restore();
         },
@@ -453,6 +460,7 @@ export function renderScene(
       draw: (c) => {
         c.save();
         c.globalAlpha = alpha;
+        c.filter = filtroCss;
         c.drawImage(cached, drawX, drawY);
         c.fillStyle = gafete;
         c.fillRect(drawX + 9 * zoom, drawY + 19 * zoom, 2 * zoom, 2 * zoom);
@@ -793,7 +801,7 @@ function renderBubbles(
     // Position: centered above the character's head
     // Character is anchored bottom-center at (ch.x, ch.y), sprite is 16x24
     // Place bubble above head with a small gap; follow sitting offset
-    const sittingOff = ch.state === CharacterState.TYPE ? BUBBLE_SITTING_OFFSET_PX : 0;
+    const sittingOff = estaSentado(ch) ? BUBBLE_SITTING_OFFSET_PX : 0; // personal: parado no
     const bubbleX = Math.round(offsetX + ch.x * zoom - cached.width / 2);
     const bubbleY = Math.round(
       offsetY + (ch.y + sittingOff - BUBBLE_VERTICAL_OFFSET_PX) * zoom - cached.height - 1 * zoom,

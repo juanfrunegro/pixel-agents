@@ -19,6 +19,7 @@ import {
   registrarSub,
   statusDe,
 } from '../src/personal/personal.js';
+import { _reiniciarReuniones, reunionDe } from '../src/personal/reuniones.js';
 
 function personaje(id: number, cambios: Partial<Character> = {}): Character {
   return {
@@ -72,6 +73,12 @@ describe('dormido sin tokens', () => {
         [106, despierto],
       ]),
       sendToSeat: (id: number) => aSilla.push(id),
+      seats: new Map(),
+      seatZone: () => null,
+      getLayout: () => ({ furniture: [], cols: 1, areaTiles: [] }),
+      tileMap: [],
+      blockedTiles: new Set<string>(),
+      walkableTiles: [],
     } as unknown as OfficeState;
     tickPersonal(os, ahora);
     expect(sentado.seatTimer).toBeGreaterThan(0);
@@ -93,15 +100,19 @@ describe('sesiones de WSL', () => {
 });
 
 describe('agentes hablando', () => {
-  it('al lanzar un sub-agente hablan por turnos: el que lo lanza, el sub-agente, y otra vez', () => {
+  it('al lanzar un sub-agente van a Reuniones (hablan al llegar); si ya está en otra, hablan ahí mismo', () => {
     _reiniciarConversaciones();
+    _reiniciarReuniones();
     const t0 = 1_000_000;
     alLanzarSub(1, -1, t0);
+    expect(reunionDe(1, t0)?.ids).toEqual([1, -1]);
+    expect([...hablando(t0)]).toEqual([]);
+    alLanzarSub(1, -2, t0); // lanzó otro a la vez: ese habla en el lugar
     const turno = TURNO_SEG * 1000;
     expect([...hablando(t0)]).toEqual([1]);
-    expect([...hablando(t0 + turno)]).toEqual([-1]);
+    expect([...hablando(t0 + turno)]).toEqual([-2]);
     expect([...hablando(t0 + 2 * turno)]).toEqual([1]);
-    expect([...hablando(t0 + 3 * turno)]).toEqual([-1]);
+    expect([...hablando(t0 + 3 * turno)]).toEqual([-2]);
     expect([...hablando(t0 + 4 * turno)]).toEqual([]);
   });
 

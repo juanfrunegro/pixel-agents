@@ -1,4 +1,5 @@
 import { pickDiversePalette } from '../../../../core/src/paletteUtils.js';
+import { esSalaComun } from '../../../../core/src/salasComunes.js';
 import {
   AUTO_ON_FACING_DEPTH,
   AUTO_ON_SIDE_DEPTH,
@@ -39,7 +40,7 @@ import type {
   TileType as TileTypeVal,
 } from '../types.js';
 import { CharacterState, Direction, PetState, TILE_SIZE } from '../types.js';
-import { createCharacter, updateCharacter } from './characters.js';
+import { createCharacter, estaSentado, updateCharacter } from './characters.js';
 import { advanceMatrixEffect, startMatrixEffect } from './matrixEffectState.js';
 import { createPet, updatePet } from './petEntity.js';
 import { anchorTile, closestFreeSeat } from './seatPlacement.js';
@@ -262,9 +263,16 @@ export class OfficeState {
   /** Temporarily unblock a character's own seat, run fn, then re-block */
   private withOwnSeatUnblocked<T>(ch: Character, fn: () => T): T {
     const key = this.ownSeatKey(ch);
+    // personal: también el asiento al que va (sillón de la cafetería, silla de Reuniones), si no está ya libre
+    const destino =
+      ch.destino?.sentado && `${ch.destino.seatCol},${ch.destino.seatRow}` !== key
+        ? `${ch.destino.seatCol},${ch.destino.seatRow}`
+        : null;
+    const desbloqueado = destino !== null && this.blockedTiles.delete(destino);
     if (key) this.blockedTiles.delete(key);
     const result = fn();
     if (key) this.blockedTiles.add(key);
+    if (desbloqueado && destino) this.blockedTiles.add(destino);
     return result;
   }
 
@@ -362,7 +370,8 @@ export class OfficeState {
     const electronicsTiles = this.buildElectronicsTileSet();
     const freeSeats: string[] = [];
     for (const [uid, seat] of this.seats) {
-      if (!seat.assigned) freeSeats.push(uid);
+      // personal: en las salas compartidas (cafetería, reuniones…) no tiene su puesto nadie
+      if (!seat.assigned && !esSalaComun(this.seatZone(uid))) freeSeats.push(uid);
     }
     if (freeSeats.length === 0) return null;
 
@@ -1128,7 +1137,7 @@ export class OfficeState {
     for (const id of toDelete) {
       this.characters.delete(id);
     }
-    tickPersonal(this); // personal: dormido sin tokens (personal/ambiente.ts)
+    tickPersonal(this); // personal: adónde va cada uno (personal/ambiente.ts)
 
     // ── Pet FSM ────────────────────────────────────────────────
     for (const pet of this.pets) {
@@ -1180,7 +1189,7 @@ export class OfficeState {
       if (ch.matrixEffect === 'despawn') continue;
       // Character sprite is 16x24, anchored bottom-center
       // Apply sitting offset to match visual position
-      const sittingOffset = ch.state === CharacterState.TYPE ? CHARACTER_SITTING_OFFSET_PX : 0;
+      const sittingOffset = estaSentado(ch) ? CHARACTER_SITTING_OFFSET_PX : 0; // personal: parado no
       const anchorY = ch.y + sittingOffset;
       const left = ch.x - CHARACTER_HIT_HALF_WIDTH;
       const right = ch.x + CHARACTER_HIT_HALF_WIDTH;

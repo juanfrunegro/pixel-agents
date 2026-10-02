@@ -109,6 +109,15 @@ export function updateCharacter(
 
   switch (ch.state) {
     case CharacterState.TYPE: {
+      // personal: inactivo con destino (cafetería, reunión): sentado quieto ahí, sin pasear; si cambió, se levanta
+      if (!ch.isActive && ch.destino) {
+        ch.frame = 0;
+        ch.frameTimer = 0;
+        if (ch.tileCol !== ch.destino.seatCol || ch.tileRow !== ch.destino.seatRow) {
+          ch.state = CharacterState.IDLE;
+        }
+        break;
+      }
       if (ch.frameTimer >= TYPE_FRAME_DURATION_SEC) {
         ch.frameTimer -= TYPE_FRAME_DURATION_SEC;
         ch.frame = (ch.frame + 1) % 2;
@@ -179,6 +188,30 @@ export function updateCharacter(
             ch.frame = 0;
             ch.frameTimer = 0;
           }
+        }
+        break;
+      }
+      // personal: inactivo con destino (cafetería, reunión): camina hasta ahí y se queda, sentado si es un asiento
+      if (ch.destino) {
+        const d = ch.destino;
+        if (ch.tileCol === d.seatCol && ch.tileRow === d.seatRow) {
+          ch.dir = d.facingDir;
+          if (d.sentado) {
+            ch.state = CharacterState.TYPE;
+            ch.frame = 0;
+            ch.frameTimer = 0;
+          }
+          break;
+        }
+        const path = findPath(ch.tileCol, ch.tileRow, d.seatCol, d.seatRow, tileMap, blockedTiles);
+        if (path.length > 0) {
+          ch.path = path;
+          ch.moveProgress = 0;
+          ch.state = CharacterState.WALK;
+          ch.frame = 0;
+          ch.frameTimer = 0;
+        } else {
+          ch.destino = undefined; // no hay camino: pasea como en el original
         }
         break;
       }
@@ -256,6 +289,15 @@ export function updateCharacter(
             } else {
               ch.state = CharacterState.IDLE;
             }
+          }
+        } else if (ch.destino) {
+          // personal: inactivo con destino: llegó (se sienta o se queda parado) o sigue camino desde IDLE
+          const d = ch.destino;
+          if (ch.tileCol === d.seatCol && ch.tileRow === d.seatRow) {
+            ch.state = d.sentado ? CharacterState.TYPE : CharacterState.IDLE;
+            ch.dir = d.facingDir;
+          } else {
+            ch.state = CharacterState.IDLE;
           }
         } else {
           // Check if arrived at assigned seat — sit down for a rest before wandering again
@@ -338,9 +380,18 @@ export function updateCharacter(
 }
 
 /** Get the correct sprite frame for a character's current state and direction */
+/**
+ * Personal: sentado (en su silla, un sillón o una silla de Reuniones) o parado trabajando frente a un mueble
+ * (biblioteca, atril, pizarrón, mesa contable: destino sin asiento). Parado no lleva el corrimiento de sentado.
+ */
+export function estaSentado(ch: Character): boolean {
+  return ch.state === CharacterState.TYPE && !(ch.destino && ch.destino.sentado !== true);
+}
+
 export function getCharacterSprite(ch: Character, sprites: CharacterSprites): SpriteData {
   switch (ch.state) {
     case CharacterState.TYPE:
+      if (!estaSentado(ch)) return sprites.walk[ch.dir][1]; // personal: parado frente al mueble
       if (isReadingTool(ch.currentTool)) {
         return sprites.reading[ch.dir][ch.frame % 2];
       }

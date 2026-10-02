@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
+import {
+  SALA_BIBLIOTECA,
+  SALA_CAFETERIA,
+  SALA_PRESENTACIONES,
+  SALA_REUNIONES,
+} from '../../core/src/salasComunes.js';
 import { createCharacter, updateCharacter } from '../src/office/engine/characters.js';
 import type { OfficeState } from '../src/office/engine/officeState.js';
 import type { Seat, TileType as TileTypeVal } from '../src/office/types.js';
@@ -80,15 +86,48 @@ describe('puntos de cada lugar', () => {
     expect(puntos.every((p) => p.facingDir === Direction.UP && p.area === 'ERP')).toBe(true);
   });
 
-  it('elige el libre más cercano, y solo en su sala', () => {
-    expect(elegirPunto(puntos, 'biblioteca', 'ERP', { col: 5, row: 4 }, new Set())).toMatchObject({
+  it('sin salas compartidas en el plano, elige el libre más cercano de cualquier sala', () => {
+    expect(elegirPunto(puntos, 'biblioteca', { col: 5, row: 4 }, new Set())).toMatchObject({
       col: 1,
       row: 1,
     });
+    expect(elegirPunto(puntos, 'biblioteca', { col: 5, row: 4 }, new Set(['1,1']))).toMatchObject({
+      col: 0,
+      row: 1,
+    });
     expect(
-      elegirPunto(puntos, 'biblioteca', 'ERP', { col: 5, row: 4 }, new Set(['1,1'])),
-    ).toMatchObject({ col: 0, row: 1 });
-    expect(elegirPunto(puntos, 'biblioteca', 'Chaina', { col: 0, row: 1 }, new Set())).toBeNull();
+      elegirPunto(puntos, 'biblioteca', { col: 0, row: 1 }, new Set(['0,1', '1,1'])),
+    ).toBeNull();
+  });
+
+  it('con salas compartidas va a la suya aunque tenga un mueble igual más cerca', () => {
+    const comun = { ...puntos[0], col: 30, row: 1, area: SALA_BIBLIOTECA };
+    expect(elegirPunto([...puntos, comun], 'biblioteca', { col: 0, row: 1 }, new Set())).toBe(
+      comun,
+    );
+    // El pizarrón de planificar es el de Reuniones; el de Presentaciones no cuenta.
+    const reunion = { ...puntos[2], col: 40, area: SALA_REUNIONES };
+    const presentacion = { ...puntos[2], col: 5, area: SALA_PRESENTACIONES };
+    expect(elegirPunto([presentacion, reunion], 'pizarron', { col: 5, row: 1 }, new Set())).toBe(
+      reunion,
+    );
+  });
+
+  it('en la cafetería prefiere un asiento libre aunque el piso quede más cerca', () => {
+    const asiento = {
+      lugar: 'cafeteria' as const,
+      col: 9,
+      row: 1,
+      facingDir: Direction.DOWN,
+      area: SALA_CAFETERIA,
+      sentado: true,
+      prioridad: 0,
+    };
+    const piso = { ...asiento, col: 1, sentado: false, prioridad: 1 };
+    expect(elegirPunto([piso, asiento], 'cafeteria', { col: 0, row: 1 }, new Set())).toBe(asiento);
+    expect(elegirPunto([piso, asiento], 'cafeteria', { col: 0, row: 1 }, new Set(['9,1']))).toBe(
+      piso,
+    );
   });
 });
 
@@ -138,6 +177,7 @@ describe('no va y viene con cada herramienta', () => {
       getLayout: () => ({ ...plano, rows: 5, tiles: [], version: 1 }),
       tileMap: Array.from({ length: 5 }, () => Array(6).fill(TileType.FLOOR_1)),
       blockedTiles: new Set<string>(),
+      walkableTiles: [],
       seatZone: () => 'ERP',
     } as unknown as OfficeState;
     ch.tileCol = 3;

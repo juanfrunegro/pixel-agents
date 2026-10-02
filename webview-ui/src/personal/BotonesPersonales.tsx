@@ -1,6 +1,6 @@
 /**
- * Personal (copia de juanfrunegro): botones "Recargar", "Dividir", "Organigrama" y "Apagar" de la barra de abajo (solo en el
- * navegador). Recargar vuelve a armar las salas con los proyectos de Orca sin reiniciar el servidor y recarga la
+ * Personal (copia de juanfrunegro): botones "Recargar", filtro "Todos | Windows | WSL", "Organigrama" y "Apagar" de la
+ * barra de abajo (solo en el navegador). Recargar vuelve a armar las salas con los proyectos de Orca sin reiniciar el servidor y recarga la
  * página. Apagar pide confirmación con un segundo clic y apaga el servidor; se vuelve a abrir solo con el próximo
  * agente.
  */
@@ -9,13 +9,19 @@ import { useEffect, useState } from 'react';
 import { Button } from '../components/ui/Button.js';
 import { isBrowserRuntime } from '../runtime.js';
 import { transport } from '../transport/index.js';
-import { setPantallaDividida, usePantallaDividida } from './division.js';
+import { setFiltroSistema, type Sistema, useFiltroSistema } from './filtro.js';
+
+const SISTEMAS: Array<{ id: Sistema; texto: string; title: string }> = [
+  { id: 'todos', texto: 'Todos', title: 'Ver todos los agentes con su color' },
+  { id: 'windows', texto: 'Windows', title: 'Resaltar los de Windows (los de WSL se apagan)' },
+  { id: 'wsl', texto: 'WSL', title: 'Resaltar los de WSL (los de Windows se apagan)' },
+];
 
 export function BotonesPersonales() {
   const [confirmar, setConfirmar] = useState(false);
   const [apagado, setApagado] = useState(false);
   const [recarga, setRecarga] = useState<'no' | 'pidiendo' | 'error'>('no');
-  const dividida = usePantallaDividida();
+  const filtro = useFiltroSistema();
   useEffect(
     () =>
       transport.onMessage((msg) => {
@@ -51,13 +57,16 @@ export function BotonesPersonales() {
       >
         {recarga === 'pidiendo' ? 'Recargando…' : recarga === 'error' ? 'No se pudo' : 'Recargar'}
       </Button>
-      <Button
-        variant={dividida ? 'active' : 'default'}
-        onClick={() => setPantallaDividida(!dividida)}
-        title="Windows a la izquierda y WSL a la derecha, al mismo tiempo"
-      >
-        {dividida ? 'Vista única' : 'Dividir: Windows | WSL'}
-      </Button>
+      {SISTEMAS.map((s) => (
+        <Button
+          key={s.id}
+          variant={filtro === s.id ? 'active' : 'default'}
+          onClick={() => setFiltroSistema(s.id)}
+          title={s.title}
+        >
+          {s.texto}
+        </Button>
+      ))}
       <Button
         onClick={() =>
           window.open(`/organigrama?token=${encodeURIComponent(token)}`, '_blank', 'noopener')

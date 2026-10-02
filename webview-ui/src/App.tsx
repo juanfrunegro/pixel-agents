@@ -27,9 +27,7 @@ import { isRotatable } from './office/layout/furnitureCatalog.js';
 import { migrateLayoutColors } from './office/layout/layoutSerializer.js';
 import { getPetCount } from './office/sprites/petSpriteData.js';
 import { EditTool, type OfficeLayout } from './office/types.js';
-import { usePantallaDividida } from './personal/division.js';
 import { FichaAgente } from './personal/FichaAgente.js';
-import { VistaDividida } from './personal/VistaDividida.js';
 import { isBrowserRuntime, isE2E } from './runtime.js';
 import { installTestHooks } from './testHooks.js';
 import { transport } from './transport/index.js';
@@ -244,7 +242,6 @@ function App() {
   }, []);
 
   const officeState = getOfficeState();
-  const dividida = usePantallaDividida(); // personal: Windows | WSL lado a lado
 
   // Merged set of folders the Areas dropdown can map: real workspace folders plus
   // every distinct folder an agent has run in this session (deduped by name; name
@@ -355,7 +352,6 @@ function App() {
         showAreas={effectiveShowAreas}
         activeAreaLabel={activeAreaLabel}
       />
-      {!editor.isEditMode && <VistaDividida officeState={officeState} onClick={handleClick} />}
 
       {!isDebugMode ? (
         <>
@@ -430,21 +426,18 @@ function App() {
               );
             })()}
 
-          {/* personal: con la pantalla dividida las etiquetas apuntarían al canvas de abajo */}
-          {!dividida && (
-            <ToolOverlay
-              officeState={officeState}
-              agents={agents}
-              agentTools={agentTools}
-              subagentTools={subagentTools}
-              subagentCharacters={subagentCharacters}
-              containerRef={containerRef}
-              zoom={editor.zoom}
-              panRef={editor.panRef}
-              onCloseAgent={handleCloseAgent}
-              alwaysShowOverlay={alwaysShowOverlay}
-            />
-          )}
+          <ToolOverlay
+            officeState={officeState}
+            agents={agents}
+            agentTools={agentTools}
+            subagentTools={subagentTools}
+            subagentCharacters={subagentCharacters}
+            containerRef={containerRef}
+            zoom={editor.zoom}
+            panRef={editor.panRef}
+            onCloseAgent={handleCloseAgent}
+            alwaysShowOverlay={alwaysShowOverlay}
+          />
           <FichaAgente officeState={officeState} subagentCharacters={subagentCharacters} />
         </>
       ) : (

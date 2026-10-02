@@ -9,14 +9,33 @@
  *   pizarrón    ← planificar (TodoWrite, tareas, plan mode, otras skills)
  *   (nada)      ← escribir código o correr comandos (Edit, Write, Bash…): su escritorio, como en el original
  * En ese orden: atril y contable miran de qué se trata la tarea, los otros solo la herramienta.
+ * Además, sin depender de la herramienta (ver ambiente.ts): cafetería ← inactivo; reunión ← reunión con otro agente.
  *
- * Los lugares salen de los muebles del plano (cualquier plano, también uno editado a mano): el tile libre de adelante de
- * cada biblioteca o pizarrón, dentro de la misma sala que el agente.
+ * Biblioteca, atriles, pizarrones (los de Reuniones: planificar es medio reunión), cafetería y reuniones son salas
+ * compartidas entre proyectos (core/src/salasComunes.ts); la mesa contable está en la oficina de Finanzas. Los puntos
+ * salen de los muebles del plano: el tile libre de adelante de cada biblioteca, atril o pizarrón, y los asientos de la
+ * cafetería y de Reuniones. En un plano editado a mano sin esas salas, vale el mueble más cercano de cualquier sala.
  */
+import {
+  SALA_BIBLIOTECA,
+  SALA_CAFETERIA,
+  SALA_DISENO,
+  SALA_REUNIONES,
+} from '../../../core/src/salasComunes.js';
 import type { Direction, PlacedFurniture } from '../office/types.js';
 import { Direction as Dir } from '../office/types.js';
 
-export type Lugar = 'biblioteca' | 'pizarron' | 'atril' | 'contable';
+export type Lugar = 'biblioteca' | 'pizarron' | 'atril' | 'contable' | 'cafeteria' | 'reunion';
+
+/** Sala de cada lugar; null = donde esté el mueble (la mesa contable, en Finanzas). */
+export const SALA_DE_LUGAR: Record<Lugar, string | null> = {
+  biblioteca: SALA_BIBLIOTECA,
+  atril: SALA_DISENO,
+  pizarron: SALA_REUNIONES,
+  contable: null,
+  cafeteria: SALA_CAFETERIA,
+  reunion: SALA_REUNIONES,
+};
 
 const BIBLIOTECA = new Set([
   'Read',
@@ -83,6 +102,10 @@ export interface Punto {
   row: number;
   facingDir: Direction;
   area: string | null;
+  /** Es un asiento (sillón, silla): se sienta. Si no, se queda parado mirando al mueble. */
+  sentado?: boolean;
+  /** Menor = se elige antes (los asientos de la cafetería antes que el piso). */
+  prioridad?: number;
 }
 
 export interface Plano {
@@ -130,24 +153,73 @@ export function puntosDeLugares(
   return puntos;
 }
 
+/** Puntos de los asientos (sillas, sillones) de una sala: para sentarse en la cafetería o en una reunión. */
+export function puntosDeAsientos(
+  asientos: Iterable<{
+    seatCol: number;
+    seatRow: number;
+    facingDir: Direction;
+    sala: string | null;
+  }>,
+  sala: string,
+  lugar: Lugar,
+): Punto[] {
+  const out: Punto[] = [];
+  for (const a of asientos) {
+    if (a.sala !== sala) continue;
+    out.push({
+      lugar,
+      col: a.seatCol,
+      row: a.seatRow,
+      facingDir: a.facingDir,
+      area: sala,
+      sentado: true,
+      prioridad: 0,
+    });
+  }
+  return out;
+}
+
 /**
- * El punto libre más cercano a `desde` para ese lugar, en la misma sala (si el agente tiene sala). `ocupados` son los
- * tiles que ya eligieron otros agentes.
+ * Para cuando se llenan los asientos: el piso libre de la sala (parado). `tiles` son los caminables, ya sin muebles.
+ */
+export function puntosDePiso(
+  tiles: Iterable<{ col: number; row: number }>,
+  salaDe: (col: number, row: number) => string | null,
+  sala: string,
+  lugar: Lugar,
+): Punto[] {
+  const out: Punto[] = [];
+  for (const t of tiles) {
+    if (salaDe(t.col, t.row) !== sala) continue;
+    out.push({ lugar, col: t.col, row: t.row, facingDir: Dir.DOWN, area: sala, prioridad: 1 });
+  }
+  return out;
+}
+
+/**
+ * El punto libre para ese lugar más cercano a `desde`: primero los de su sala (SALA_DE_LUGAR) y, si el plano no la
+ * tiene, el mueble más cercano de cualquier sala. Entre los de su sala gana la prioridad y después la distancia.
+ * `ocupados` son los tiles que ya eligieron otros agentes.
  */
 export function elegirPunto(
   puntos: Punto[],
   lugar: Lugar,
-  area: string | null,
   desde: { col: number; row: number },
   ocupados: Set<string>,
 ): Punto | null {
+  const sala = SALA_DE_LUGAR[lugar];
+  const delLugar = puntos.filter((p) => p.lugar === lugar);
+  const enSala = sala ? delLugar.filter((p) => p.area === sala) : delLugar;
+  const candidatos = enSala.length > 0 ? enSala : delLugar;
   let mejor: Punto | null = null;
-  let dist = Infinity;
-  for (const p of puntos) {
-    if (p.lugar !== lugar || p.area !== area || ocupados.has(`${p.col},${p.row}`)) continue;
+  let clave = Infinity;
+  for (const p of candidatos) {
+    if (ocupados.has(`${p.col},${p.row}`)) continue;
     const d = Math.abs(p.col - desde.col) + Math.abs(p.row - desde.row);
-    if (d < dist) {
-      dist = d;
+    const k = (p.prioridad ?? 0) * 100_000 + d;
+    if (k < clave) {
+      clave = k;
       mejor = p;
     }
   }

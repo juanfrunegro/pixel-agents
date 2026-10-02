@@ -254,8 +254,11 @@ export interface Character {
   maxContextTokens: number;
 
   // -- Personal (copia de juanfrunegro): lugar según la actividad (personal/lugares.ts) --
-  /** Mientras trabaja, va acá en vez de a su silla (biblioteca, pizarrón…). undefined = su silla. */
-  destino?: { seatCol: number; seatRow: number; facingDir: Direction };
+  /**
+   * Va acá en vez de a su silla: mientras trabaja (biblioteca, atril…), en una reunión o, inactivo, en la cafetería.
+   * `sentado` = es un asiento (se sienta); si no, se queda parado. undefined = su silla (y, inactivo, pasea).
+   */
+  destino?: { seatCol: number; seatRow: number; facingDir: Direction; sentado?: boolean };
   /** Lugar al que va ahora y desde cuándo (ms), para no ir y venir con cada herramienta. */
   lugar?: string | null;
   lugarDesde?: number;

@@ -18,11 +18,12 @@ import {
   TOOL_OVERLAY_VERTICAL_OFFSET,
 } from '../../constants.js';
 import type { SubagentCharacter } from '../../hooks/useExtensionMessages.js';
+import { apagadoPorFiltro, useFiltroSistema } from '../../personal/filtro.js';
 import { colorModelo, modeloDe, nombreDe } from '../../personal/personal.js';
+import { estaSentado } from '../engine/characters.js';
 import type { OfficeState } from '../engine/officeState.js';
 import { overlayProjection } from '../projection.js';
 import type { ToolActivity } from '../types.js';
-import { CharacterState } from '../types.js';
 
 // Both turn-end states show the green checkmark bubble. A finished turn (Stop)
 // shows ONLY the checkmark (the label falls through to its normal idle text);
@@ -95,6 +96,7 @@ export function ToolOverlay({
   alwaysShowOverlay,
 }: ToolOverlayProps) {
   const [, setTick] = useState(0);
+  const filtro = useFiltroSistema(); // personal: filtro Windows/WSL
   useEffect(() => {
     let rafId = 0;
     const tick = () => {
@@ -133,9 +135,11 @@ export function ToolOverlay({
 
         // Only show for hovered or selected agents (unless always-show is on)
         if (!alwaysShowOverlay && !isSelected && !isHovered) return null;
+        // personal: los apagados por el filtro Windows/WSL no llevan etiqueta (salvo el que tocaste)
+        if (apagadoPorFiltro(id, filtro) && !isSelected) return null;
 
         // Position above character
-        const sittingOffset = ch.state === CharacterState.TYPE ? CHARACTER_SITTING_OFFSET_PX : 0;
+        const sittingOffset = estaSentado(ch) ? CHARACTER_SITTING_OFFSET_PX : 0; // personal: parado no
         const screenX = project.toScreenX(ch.x);
         const screenY = project.toScreenY(ch.y + sittingOffset - TOOL_OVERLAY_VERTICAL_OFFSET);
 

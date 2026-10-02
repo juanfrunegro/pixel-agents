@@ -14,4 +14,3 @@ export const COLOR_BURBUJA_TEXTO = '#8888AA';
 export const COLOR_WSL = '#14b8a6';
 export const COLOR_WINDOWS = '#3b82f6';
 export const COLOR_ETIQUETA_TEXTO = '#ffffff';
-export const COLOR_DIVISOR = '#0d0f14';
