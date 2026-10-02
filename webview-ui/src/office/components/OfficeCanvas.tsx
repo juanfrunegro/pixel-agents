@@ -9,6 +9,7 @@ import {
   ZOOM_SCROLL_THRESHOLD,
 } from '../../constants.js';
 import { unlockAudio } from '../../notificationSound.js';
+import { CamaraPersonal } from '../../personal/camara.js';
 import { transport } from '../../transport/index.js';
 import { getColorizedSprite } from '../colorize.js';
 import { canPlaceFurniture, getWallPlacementRow } from '../editor/editorActions.js';
@@ -78,6 +79,7 @@ export function OfficeCanvas({
   const isEraseDraggingRef = useRef(false);
   // Zoom scroll accumulator for trackpad pinch sensitivity
   const zoomAccumulatorRef = useRef(0);
+  const camaraRef = useRef(new CamaraPersonal()); // personal: seguir sin salirse de la oficina y volver al soltar
 
   // Clamp pan so the map edge can't go past a margin inside the viewport
   const clampPan = useCallback(
@@ -241,13 +243,24 @@ export function OfficeCanvas({
           officeState.cameraFollowId !== null
             ? officeState.characters.get(officeState.cameraFollowId)
             : undefined;
-        const cameraFocus = followCh ?? officeState.greeterCameraTarget;
-        if (cameraFocus) {
-          const layout = officeState.getLayout();
-          const mapW = layout.cols * TILE_SIZE * zoom;
-          const mapH = layout.rows * TILE_SIZE * zoom;
-          const targetX = mapW / 2 - cameraFocus.x * zoom;
-          const targetY = mapH / 2 - cameraFocus.y * zoom;
+        const layout = officeState.getLayout();
+        const mapW = layout.cols * TILE_SIZE * zoom;
+        const mapH = layout.rows * TILE_SIZE * zoom;
+        // personal: seguir sin sacar la oficina de cuadro y volver al soltar (personal/camara.ts)
+        const deCamara = camaraRef.current.objetivo(
+          followCh ? officeState.cameraFollowId : null,
+          followCh ?? null,
+          panRef.current,
+          { zoom, mapW, mapH, vistaW: w, vistaH: h },
+        );
+        const greeter = officeState.greeterCameraTarget;
+        const target =
+          followCh || !greeter
+            ? deCamara
+            : { x: mapW / 2 - greeter.x * zoom, y: mapH / 2 - greeter.y * zoom };
+        if (target) {
+          const targetX = target.x;
+          const targetY = target.y;
           const dx = targetX - panRef.current.x;
           const dy = targetY - panRef.current.y;
           if (
@@ -255,6 +268,7 @@ export function OfficeCanvas({
             Math.abs(dy) < CAMERA_FOLLOW_SNAP_THRESHOLD
           ) {
             panRef.current = { x: targetX, y: targetY };
+            if (!followCh && !greeter) camaraRef.current.llego();
           } else {
             panRef.current = {
               x: panRef.current.x + dx * CAMERA_FOLLOW_LERP,
@@ -272,7 +286,6 @@ export function OfficeCanvas({
           characters: officeState.characters,
         };
 
-        const layout = officeState.getLayout();
         const { offsetX, offsetY } = renderFrame(
           ctx,
           w,
@@ -544,6 +557,7 @@ export function OfficeCanvas({
         // Break camera follow + greeter centering on manual pan
         officeState.cameraFollowId = null;
         officeState.cancelGreeterCamera();
+        camaraRef.current.paneoManual(); // personal
         isPanningRef.current = true;
         panStartRef.current = {
           mouseX: e.clientX,
@@ -849,6 +863,7 @@ export function OfficeCanvas({
         const dpr = window.devicePixelRatio || 1;
         officeState.cameraFollowId = null;
         officeState.cancelGreeterCamera();
+        camaraRef.current.paneoManual(); // personal
         panRef.current = clampPan(
           panRef.current.x - e.deltaX * dpr,
           panRef.current.y - e.deltaY * dpr,
