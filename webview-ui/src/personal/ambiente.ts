@@ -4,31 +4,41 @@
  * Regla, en este orden:
  * 1. Sin tokens: se duerme (Zzz) en su escritorio, quieto. No va a la cafetería.
  * 2. Esperando tu PERMISO: no está inactivo, se queda en su escritorio (para que veas quién te necesita).
- * 3. En una reunión (reuniones.ts): va a una silla de Reuniones, al lado del otro, y cuando llegan hablan.
+ * 3. Presentando (se acaba de decir su aviso por voz, ver presentandoDe): va a Presentaciones, frente a la pantalla.
+ * 3b. En una reunión (reuniones.ts): va a una silla de Reuniones, al lado del otro, y cuando llegan hablan.
  * 4. Sin uso (terminó el turno, espera tu próximo mensaje, o una sesión restaurada sin nada en curso; ver enUso en
  *    personal.ts): se va a la Cafetería y se sienta; si no hay sillones libres, se queda parado ahí. Vuelve en cuanto
  *    arranca a trabajar. Los sub-agentes no van: desaparecen al terminar.
  * 5. Trabajando: va al lugar de lo que está haciendo (biblioteca, atril, pizarrón, mesa contable; ver lugares.ts) o a
  *    su escritorio para escribir código. Se queda al menos PERMANENCIA_MS en cada lugar para no ir y venir con cada
- *    herramienta. El "escritorio" de un sub-agente es el piso libre más cercano a la silla del que lo lanzó.
+ *    herramienta. El "escritorio" de un sub-agente es un escritorio libre de la oficina de su proyecto (la de la silla
+ *    del que lo lanzó); si no hay, el piso libre más cercano a esa silla.
+ * Además, cada cuadro calcula las luces de las salas (luces.ts): deploy y Presentaciones.
  */
-import { SALA_CAFETERIA, SALA_REUNIONES } from '../../../core/src/salasComunes.js';
+import {
+  SALA_CAFETERIA,
+  SALA_PRESENTACIONES,
+  SALA_REUNIONES,
+} from '../../../core/src/salasComunes.js';
 import type { OfficeState } from '../office/engine/officeState.js';
 import { getCatalogEntry } from '../office/layout/furnitureCatalog.js';
 import { isWalkable } from '../office/layout/tileMap.js';
 import type { Character } from '../office/types.js';
 import { CharacterState, Direction } from '../office/types.js';
 import { conversar, turnosDe } from './burbujas.js';
+import { calcularLuces, type EstadoLuz, setLuces } from './luces.js';
 import {
   actividadDe,
   elegirPunto,
   type Lugar,
+  lugarDeMueble,
   type Punto,
   puntosDeAsientos,
   puntosDeLugares,
   puntosDePiso,
+  puntosDePresentacion,
 } from './lugares.js';
-import { dormidoDe, enUso, padreDe, statusDe } from './personal.js';
+import { deployDe, dormidoDe, enUso, padreDe, presentandoDe, statusDe, vozDe } from './personal.js';
 import {
   DURACION_PROYECTO_MS,
   ESPERA_LLEGADA_MS,
@@ -55,14 +65,19 @@ function puntos(os: OfficeState): Punto[] {
   }
   const salaDe = (col: number, row: number) => layout.areaTiles?.[row * layout.cols + col] ?? null;
   const asientos = [...os.seats.entries()].map(([uid, s]) => ({ ...s, sala: os.seatZone(uid) }));
+  const deLugares = puntosDeLugares(
+    { furniture: layout.furniture, cols: layout.cols, areaTiles: layout.areaTiles },
+    (tipo) => {
+      const e = getCatalogEntry(tipo);
+      return e ? { w: e.footprintW, h: e.footprintH } : undefined;
+    },
+    (col, row) => isWalkable(col, row, os.tileMap, os.blockedTiles),
+  );
   const p = [
-    ...puntosDeLugares(
-      { furniture: layout.furniture, cols: layout.cols, areaTiles: layout.areaTiles },
-      (tipo) => {
-        const e = getCatalogEntry(tipo);
-        return e ? { w: e.footprintW, h: e.footprintH } : undefined;
-      },
-      (col, row) => isWalkable(col, row, os.tileMap, os.blockedTiles),
+    ...deLugares,
+    ...puntosDePresentacion(
+      deLugares,
+      puntosDeAsientos(asientos, SALA_PRESENTACIONES, 'presentacion'),
     ),
     ...puntosDeAsientos(asientos, SALA_CAFETERIA, 'cafeteria'),
     ...puntosDePiso(os.walkableTiles, salaDe, SALA_CAFETERIA, 'cafeteria'),
@@ -85,19 +100,47 @@ function ocupadosPara(os: OfficeState, ch: Character): Set<string> {
 // ── El escritorio de cada uno ───────────────────────────────────
 
 /**
- * El "escritorio" de cada sub-agente: el piso libre más cercano a la silla del que lo lanzó, sin pegarse a otro
- * sub-agente (al menos un tile de por medio, para que no se pisen ni sus etiquetas).
+ * El "escritorio" de cada sub-agente: un escritorio libre (silla sin dueño) de la oficina del que lo lanzó, el más
+ * cercano a él; si no queda ninguno, el piso libre más cercano a su silla, sin pegarse a otro sub-agente (al menos un
+ * tile de por medio, para que no se pisen ni sus etiquetas).
  */
-const bases = new Map<number, { col: number; row: number }>();
+interface Base {
+  col: number;
+  row: number;
+  facingDir?: Direction;
+  sentado?: boolean;
+  silla?: string; // uid de la silla que tomó prestada
+}
+const bases = new Map<number, Base>();
 
-function baseDe(os: OfficeState, sub: Character): { col: number; row: number } {
+export function baseDe(os: OfficeState, sub: Character): Base {
   const padre = sub.parentAgentId !== null ? os.characters.get(sub.parentAgentId) : undefined;
   const silla = padre?.seatId ? os.seats.get(padre.seatId) : undefined;
-  if (!silla) return { col: sub.tileCol, row: sub.tileRow };
+  if (!padre?.seatId || !silla) return { col: sub.tileCol, row: sub.tileRow };
+  const oficina = os.seatZone(padre.seatId);
+  if (oficina) {
+    const tomadas = new Set<string>();
+    for (const b of bases.values()) if (b.silla) tomadas.add(b.silla);
+    for (const c of os.characters.values()) if (c.seatId) tomadas.add(c.seatId);
+    let libre: [string, typeof silla] | null = null;
+    let dist = Infinity;
+    for (const [uid, s] of os.seats) {
+      if (s.assigned || tomadas.has(uid) || os.seatZone(uid) !== oficina) continue;
+      const d = Math.abs(s.seatCol - silla.seatCol) + Math.abs(s.seatRow - silla.seatRow);
+      if (d < dist) {
+        dist = d;
+        libre = [uid, s];
+      }
+    }
+    if (libre) {
+      const [uid, s] = libre;
+      return { col: s.seatCol, row: s.seatRow, facingDir: s.facingDir, sentado: true, silla: uid };
+    }
+  }
   const otras = [...bases.values()];
   const pegado = (t: { col: number; row: number }) =>
     otras.some((b) => Math.max(Math.abs(b.col - t.col), Math.abs(b.row - t.row)) < 2);
-  let mejor = { col: sub.tileCol, row: sub.tileRow };
+  let mejor: Base = { col: sub.tileCol, row: sub.tileRow };
   let dist = Infinity;
   for (const t of os.walkableTiles) {
     if (pegado(t)) continue;
@@ -110,12 +153,22 @@ function baseDe(os: OfficeState, sub: Character): { col: number; row: number } {
   return mejor;
 }
 
+/** Solo para tests. */
+export function _reiniciarBases(): void {
+  bases.clear();
+}
+
 function alEscritorio(ch: Character): void {
   ch.lugar = undefined;
   ch.lugarDesde = undefined;
   const b = ch.isSubagent ? bases.get(ch.id) : undefined;
   ch.destino = b
-    ? { seatCol: b.col, seatRow: b.row, facingDir: ch.dir ?? Direction.DOWN }
+    ? {
+        seatCol: b.col,
+        seatRow: b.row,
+        facingDir: b.facingDir ?? ch.dir ?? Direction.DOWN,
+        sentado: b.sentado === true,
+      }
     : undefined;
 }
 
@@ -231,7 +284,14 @@ export function tickPersonal(os: OfficeState, ahora = Date.now()): void {
       continue;
     }
 
-    // 3. Reunión.
+    // 3. Presentando: se acaba de decir su aviso por voz.
+    if (!ch.isSubagent && presentandoDe(ch.id, ahora)) {
+      if (ch.lugar !== 'presentacion') ir(os, ch, 'presentacion', ahora);
+      continue;
+    }
+    if (ch.lugar === 'presentacion') alEscritorio(ch); // terminó de presentar
+
+    // 3b. Reunión.
     const r = reunionDe(ch.id, ahora);
     if (r) {
       if (ch.lugar !== 'reunion') {
@@ -261,4 +321,48 @@ export function tickPersonal(os: OfficeState, ahora = Date.now()): void {
     if (ch.isSubagent && !ch.destino && !ch.lugar) alEscritorio(ch); // a su lugar al lado del padre, no apilado
     moverSegunActividad(os, ch, ahora);
   }
+  tickLuces(os, ahora);
+}
+
+// ── Luces ───────────────────────────────────────────────────────
+
+let pantallasCache: {
+  furniture: unknown;
+  pantallas: Array<{ col: number; row: number; w: number; h: number }>;
+} | null = null;
+
+/** Pizarrones/pantallas de Presentaciones (se encienden mientras alguien presenta). */
+function pantallas(os: OfficeState): Array<{ col: number; row: number; w: number; h: number }> {
+  const layout = os.getLayout();
+  if (pantallasCache?.furniture === layout.furniture) return pantallasCache.pantallas;
+  const out: Array<{ col: number; row: number; w: number; h: number }> = [];
+  for (const f of layout.furniture) {
+    if (lugarDeMueble(f.type) !== 'pizarron') continue;
+    const e = getCatalogEntry(f.type);
+    const w = e?.footprintW ?? 1;
+    const h = e?.footprintH ?? 1;
+    // El mueble cuenta para la sala del tile de abajo (los de pared están en la fila de la pared).
+    const sala =
+      layout.areaTiles?.[(f.row + h) * layout.cols + f.col] ??
+      layout.areaTiles?.[f.row * layout.cols + f.col];
+    if (sala === SALA_PRESENTACIONES) out.push({ col: f.col, row: f.row, w, h });
+  }
+  pantallasCache = { furniture: layout.furniture, pantallas: out };
+  return out;
+}
+
+function tickLuces(os: OfficeState, ahora: number): void {
+  const estados: EstadoLuz[] = [];
+  for (const ch of os.characters.values()) {
+    if (ch.matrixEffect === 'despawn') continue;
+    const padre = padreDe(ch.id);
+    const jefe = padre !== null ? os.characters.get(padre) : ch;
+    estados.push({
+      sala: jefe?.seatId ? os.seatZone(jefe.seatId) : null,
+      deploy: deployDe(ch.id, ahora),
+      voz: vozDe(ch.id),
+      presentando: presentandoDe(ch.id, ahora),
+    });
+  }
+  setLuces(calcularLuces(estados), pantallas(os));
 }

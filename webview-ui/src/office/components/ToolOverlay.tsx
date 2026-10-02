@@ -21,6 +21,8 @@ import type { SubagentCharacter } from '../../hooks/useExtensionMessages.js';
 import { enCafeteria, separarEtiquetas } from '../../personal/etiquetas.js';
 import { apagadoPorFiltro, useFiltroSistema } from '../../personal/filtro.js';
 import { colorModelo, modeloDe, nombreDe } from '../../personal/personal.js';
+import { senalesDe } from '../../personal/senales.js';
+import { SenalesTarjeta } from '../../personal/SenalesTarjeta.js';
 import { estaSentado } from '../engine/characters.js';
 import type { OfficeState } from '../engine/officeState.js';
 import { overlayProjection } from '../projection.js';
@@ -221,6 +223,8 @@ export function ToolOverlay({
         const hasActiveTools = tools?.some((t) => !t.done);
         const isActive = ch.isActive;
         const hasWaiting = ch.bubbleType === 'waiting';
+        // personal: mano levantada, humo y deploy (el canvas los dibuja debajo de esta tarjeta)
+        const senales = senalesDe(id, ch.bubbleType === 'permission' || !!hasPermission);
 
         let dotColor: string | null = null;
         if (hasPermission || hasWaiting) {
@@ -262,6 +266,7 @@ export function ToolOverlay({
                   style={{ background: dotColor }}
                 />
               )}
+              <SenalesTarjeta senales={senales} />
               <div className="flex flex-col gap-0 overflow-hidden">
                 {teamRoleLabel && (
                   <span

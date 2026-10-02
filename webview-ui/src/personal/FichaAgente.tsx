@@ -12,17 +12,21 @@ import {
   claveDe,
   colorModelo,
   costoDe,
+  deployDe,
   despiertaA,
   dormidoDe,
   esDescartable,
   esWsl,
   etiquetaModelo,
+  humoDe,
   inicioDe,
   metaDe,
   modeloDe,
   nombreDe,
   padreDe,
+  presentandoDe,
   usePersonal,
+  vozDe,
 } from './personal.js';
 
 interface Props {
@@ -80,10 +84,17 @@ export function FichaAgente({ officeState, subagentCharacters }: Props) {
   const estado = dormidoDe(id)
     ? `dormido, sin tokens${vuelve ? ` (vuelve ${vuelve.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })})` : ''}`
     : ch.bubbleType === 'permission'
-      ? 'espera tu permiso'
-      : ch.isActive
-        ? 'trabajando'
-        : 'en pausa';
+      ? 'Esperando tu permiso'
+      : presentandoDe(id)
+        ? 'presentando: terminó y te avisó por voz'
+        : ch.isActive
+          ? 'trabajando'
+          : 'en pausa';
+  const avisos = [
+    deployDe(id) && 'deployando',
+    humoDe(id) && 'varios errores seguidos',
+    vozDe(id) && 'te va a avisar por voz al terminar',
+  ].filter(Boolean);
 
   const guardar = () => {
     transport.send({ type: 'renameAgent', clave, nombre: borrador });
@@ -162,6 +173,7 @@ export function FichaAgente({ officeState, subagentCharacters }: Props) {
       </Fila>
       {sub?.label && <Fila etiqueta="Objetivo">{sub.label}</Fila>}
       <Fila etiqueta="Estado">{estado}</Fila>
+      {avisos.length > 0 && <Fila etiqueta="Ojo">{avisos.join(' · ')}</Fila>}
       <Fila etiqueta="En la oficina">{duracion(inicioDe(id))}</Fila>
       {costo !== undefined && (
         <Fila etiqueta="Costo">US$ {costo.toFixed(2)} (equivalente API)</Fila>

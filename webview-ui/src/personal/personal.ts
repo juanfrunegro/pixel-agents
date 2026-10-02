@@ -24,7 +24,17 @@ interface Estado {
   nombres: Nombres;
   info: Map<
     number,
-    { model?: string; costUsd?: number; dormidoHasta?: number | null; wsl?: boolean }
+    {
+      model?: string;
+      costUsd?: number;
+      dormidoHasta?: number | null;
+      wsl?: boolean;
+      errores?: number;
+      ultimoError?: number | null;
+      deployDesde?: number | null;
+      voz?: boolean;
+      presento?: number | null;
+    }
   >;
   metaPorTool: Map<string, MetaSub>;
   subs: Map<number, { padre: number; toolId: string }>;
@@ -120,6 +130,11 @@ export function alMensaje(msg: any): void {
       costUsd: msg.costUsd,
       dormidoHasta: typeof msg.dormidoHasta === 'number' ? msg.dormidoHasta : null,
       wsl: msg.wsl === true,
+      errores: typeof msg.errores === 'number' ? msg.errores : 0,
+      ultimoError: typeof msg.ultimoError === 'number' ? msg.ultimoError : null,
+      deployDesde: typeof msg.deployDesde === 'number' ? msg.deployDesde : null,
+      voz: msg.voz === true,
+      presento: typeof msg.presento === 'number' ? msg.presento : null,
     });
     avisar();
   } else if (msg?.type === 'agentCreated' || msg?.type === 'existingAgents') {
@@ -212,6 +227,48 @@ export function despiertaA(charId: number): Date | null {
   const s = estado.subs.get(charId);
   const hasta = estado.info.get(s ? s.padre : charId)?.dormidoHasta;
   return hasta ? new Date(hasta * 1000) : null;
+}
+
+// ── Señales (tanda 2): humo, deploy y aviso por voz. El servidor las calcula (server/src/personal/senales.ts). ──
+
+/** Errores de herramienta seguidos para mostrar humo (mismo valor que ERRORES_PARA_HUMO del servidor). */
+export const ERRORES_PARA_HUMO = 3;
+/** El humo se va solo si el último error tiene más de esto (una sesión vieja que quedó con errores). */
+export const HUMO_VIGENTE_MS = 15 * 60_000;
+/** Un deploy sin resultado se da por terminado (mismo valor que DEPLOY_MAX_MS del servidor). */
+export const DEPLOY_MAX_MS = 20 * 60_000;
+/** Tiempo que el agente se queda presentando después de que se dijo el aviso por voz. */
+export const PRESENTACION_MS = 60_000;
+
+function infoSesion(charId: number) {
+  const s = estado.subs.get(charId);
+  return estado.info.get(s ? s.padre : charId);
+}
+
+/** Errores repetidos: humo sobre la cabeza hasta que una herramienta salga bien. Solo la sesión, no sus sub-agentes. */
+export function humoDe(charId: number, ahora = Date.now()): boolean {
+  if (estado.subs.has(charId)) return false;
+  const i = estado.info.get(charId);
+  if (!i || (i.errores ?? 0) < ERRORES_PARA_HUMO || !i.ultimoError) return false;
+  return ahora - i.ultimoError < HUMO_VIGENTE_MS;
+}
+
+/** La sesión (o la de su padre) está deployando. */
+export function deployDe(charId: number, ahora = Date.now()): boolean {
+  const d = infoSesion(charId)?.deployDesde;
+  return typeof d === 'number' && ahora - d < DEPLOY_MAX_MS;
+}
+
+/** La sesión pidió el aviso por voz y todavía no se dijo. */
+export function vozDe(charId: number): boolean {
+  return !estado.subs.has(charId) && estado.info.get(charId)?.voz === true;
+}
+
+/** Se acaba de decir el aviso por voz de esta sesión: está presentando. */
+export function presentandoDe(charId: number, ahora = Date.now()): boolean {
+  if (estado.subs.has(charId)) return false;
+  const p = estado.info.get(charId)?.presento;
+  return typeof p === 'number' && ahora - p >= 0 && ahora - p < PRESENTACION_MS;
 }
 
 /** Sesión de WSL (otra cuenta): sus sub-agentes también. */

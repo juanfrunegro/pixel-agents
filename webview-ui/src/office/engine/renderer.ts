@@ -46,6 +46,7 @@ import {
 } from '../../constants.js';
 import { renderBurbujasPersonales } from '../../personal/burbujas.js';
 import { ALFA_APAGADO, apagadoPorFiltro } from '../../personal/filtro.js';
+import { renderLuces } from '../../personal/luces.js';
 import { colorModelo, modeloDe } from '../../personal/personal.js';
 import { getColorizedFloorSprite, hasFloorSprites, WALL_COLOR } from '../floorTiles.js';
 import { mapOffset } from '../projection.js';
@@ -972,6 +973,8 @@ export function renderFrame(
     hoveredId,
     pets ?? [],
   );
+
+  renderLuces(ctx, areaTiles, cols, offsetX, offsetY, zoom); // personal: deploy y Presentaciones
 
   // Speech bubbles (always on top of characters)
   renderBubbles(ctx, characters, offsetX, offsetY, zoom);

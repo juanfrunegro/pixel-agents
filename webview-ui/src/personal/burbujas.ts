@@ -4,6 +4,8 @@
  * - Burbujas de diálogo en las reuniones (al lanzar un sub-agente, ver reuniones.ts) y cuando el sub-agente le devuelve
  *   el resultado.
  * - Etiqueta "WSL" al costado de los agentes que corren en WSL (otra cuenta), para distinguirlos de un vistazo.
+ * - Mano levantada que se mueve cuando espera tu permiso (se ve aunque el filtro Windows/WSL lo apague).
+ * - Humo gris sobre la cabeza cuando tiene errores seguidos (humoDe).
  * El original solo llama a renderBurbujasPersonales() después de sus propias burbujas.
  */
 import {
@@ -19,11 +21,16 @@ import {
   COLOR_BURBUJA_FONDO,
   COLOR_BURBUJA_TEXTO,
   COLOR_ETIQUETA_TEXTO,
+  COLOR_HUMO,
+  COLOR_HUMO_CLARO,
+  COLOR_MANO,
+  COLOR_MANO_BORDE,
+  COLOR_NUBE,
   COLOR_WSL,
   COLOR_ZZZ,
 } from './colores.js';
 import { apagadoPorFiltro } from './filtro.js';
-import { dormidoDe, esWsl } from './personal.js';
+import { dormidoDe, esWsl, humoDe } from './personal.js';
 import { DURACION_SUB_MS, reunir } from './reuniones.js';
 
 const _ = '';
@@ -74,6 +81,38 @@ export const ETIQUETA_WSL: SpriteData = sprite(
   ],
   { V, T },
 );
+
+/** Mano abierta levantada (8x10): esperando tu permiso. */
+export const MANO: SpriteData = sprite(
+  [
+    '.X.X.X..',
+    'XHXHXHX.',
+    'XHXHXHX.',
+    'XHHHHHXX',
+    'XHHHHHHX',
+    'XHHHHHX.',
+    '.XHHHX..',
+    '..XHX...',
+    '..XHX...',
+    '..XHX...',
+  ],
+  { X: COLOR_MANO_BORDE, H: COLOR_MANO },
+);
+
+/** Bocanada de humo (6x4): se dibujan tres que suben, crecen y se desvanecen. */
+export const BOCANADA: SpriteData = sprite(['.CCCC.', 'CDDDDC', 'CDDDDC', '.CCCC.'], {
+  C: COLOR_HUMO_CLARO,
+  D: COLOR_NUBE,
+});
+
+/** Nube de humo para la tarjeta del agente (10x6): más grande y clara que la bocanada, para que se lea en el panel. */
+export const NUBE: SpriteData = sprite(
+  ['..CCC.....', '.CDDDC.CC.', 'CDDDDDCDDC', 'CDDDDDDDDC', '.CDDDDDDC.', '..CCCCCC..'],
+  { C: COLOR_HUMO, D: COLOR_NUBE },
+);
+
+/** Período de la animación de la mano (ms): sube y baja, saludando. */
+export const MANO_PERIODO_MS = 900;
 
 // ── Conversaciones ──────────────────────────────────────────────
 
@@ -141,10 +180,22 @@ export function renderBurbujasPersonales(
   const quienes = hablando(ahora);
   for (const ch of characters) {
     if (ch.isGreeter) continue;
-    if (apagadoPorFiltro(ch.id)) continue; // filtro Windows/WSL: sin etiquetas ni burbujas propias
     const sentado = estaSentado(ch);
     const sittingOff = sentado ? BUBBLE_SITTING_OFFSET_PX : 0;
     const cabezaY = ch.y + sittingOff - BUBBLE_VERTICAL_OFFSET_PX;
+
+    if (ch.bubbleType === 'permission' && ch.matrixEffect === null) {
+      // Al costado derecho de la burbuja del original, subiendo y bajando: se ve aunque el filtro lo apague.
+      const mano = getCachedSprite(MANO, zoom);
+      const fase = Math.sin(((ahora % MANO_PERIODO_MS) / MANO_PERIODO_MS) * 2 * Math.PI);
+      ctx.drawImage(
+        mano,
+        Math.round(offsetX + (ch.x + 7) * zoom),
+        Math.round(offsetY + (cabezaY - 15 + fase * 1.5) * zoom),
+      );
+    }
+
+    if (apagadoPorFiltro(ch.id)) continue; // filtro Windows/WSL: sin etiquetas ni burbujas propias
 
     if (esWsl(ch.id) && ch.matrixEffect === null) {
       // Al costado izquierdo, a la altura del hombro: no pisa las burbujas, que van centradas arriba.
@@ -177,6 +228,27 @@ export function renderBurbujasPersonales(
         ctx.restore();
       }
       continue;
+    }
+
+    if (humoDe(ch.id, ahora)) {
+      // Tres bocanadas que suben desde la cabeza, crecen y se desvanecen.
+      const b = getCachedSprite(BOCANADA, zoom);
+      for (let i = 0; i < 3; i++) {
+        const t = (((ahora / 2000 + i / 3) % 1) + 1) % 1; // 0→1
+        const escala = 0.7 + t * 0.9;
+        const x = offsetX + (ch.x - 3 + Math.sin((t + i) * 3) * 2) * zoom;
+        const y = offsetY + (cabezaY + 2 - t * 14) * zoom;
+        ctx.save();
+        ctx.globalAlpha = t < 0.2 ? t / 0.2 : 1 - (t - 0.2) / 0.8;
+        ctx.drawImage(
+          b,
+          Math.round(x),
+          Math.round(y),
+          Math.round(b.width * escala),
+          Math.round(b.height * escala),
+        );
+        ctx.restore();
+      }
     }
 
     // La burbuja del original (permiso / listo) tiene prioridad.

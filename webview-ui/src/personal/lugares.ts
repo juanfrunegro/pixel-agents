@@ -9,7 +9,8 @@
  *   pizarrón    ← planificar (TodoWrite, tareas, plan mode, otras skills)
  *   (nada)      ← escribir código o correr comandos (Edit, Write, Bash…): su escritorio, como en el original
  * En ese orden: atril y contable miran de qué se trata la tarea, los otros solo la herramienta.
- * Además, sin depender de la herramienta (ver ambiente.ts): cafetería ← inactivo; reunión ← reunión con otro agente.
+ * Además, sin depender de la herramienta (ver ambiente.ts): cafetería ← inactivo; reunión ← reunión con otro agente;
+ * presentación ← se acaba de decir su aviso por voz (frente a la pantalla de Presentaciones).
  *
  * Biblioteca, atriles, pizarrones (los de Reuniones: planificar es medio reunión), cafetería y reuniones son salas
  * compartidas entre proyectos (core/src/salasComunes.ts); la mesa contable está en la oficina de Finanzas. Los puntos
@@ -20,12 +21,14 @@ import {
   SALA_BIBLIOTECA,
   SALA_CAFETERIA,
   SALA_DISENO,
+  SALA_PRESENTACIONES,
   SALA_REUNIONES,
 } from '../../../core/src/salasComunes.js';
 import type { Direction, PlacedFurniture } from '../office/types.js';
 import { Direction as Dir } from '../office/types.js';
 
-export type Lugar = 'biblioteca' | 'pizarron' | 'atril' | 'contable' | 'cafeteria' | 'reunion';
+export type Lugar =
+  'biblioteca' | 'pizarron' | 'atril' | 'contable' | 'cafeteria' | 'reunion' | 'presentacion';
 
 /** Sala de cada lugar; null = donde esté el mueble (la mesa contable, en Finanzas). */
 export const SALA_DE_LUGAR: Record<Lugar, string | null> = {
@@ -35,6 +38,7 @@ export const SALA_DE_LUGAR: Record<Lugar, string | null> = {
   contable: null,
   cafeteria: SALA_CAFETERIA,
   reunion: SALA_REUNIONES,
+  presentacion: SALA_PRESENTACIONES,
 };
 
 const BIBLIOTECA = new Set([
@@ -232,4 +236,17 @@ export function elegirPunto(
     }
   }
   return mejor;
+}
+
+/**
+ * Lugar de quien presenta: parado frente a los pizarrones/pantallas de Presentaciones (los puntos "pizarron" de esa
+ * sala) y, si están ocupados, las sillas de la sala (`sillas`, con menos prioridad).
+ */
+export function puntosDePresentacion(puntos: Punto[], sillas: Punto[] = []): Punto[] {
+  return [
+    ...puntos
+      .filter((p) => p.area === SALA_PRESENTACIONES && p.lugar === 'pizarron')
+      .map((p) => ({ ...p, lugar: 'presentacion' as const, prioridad: 0 })),
+    ...sillas.map((p) => ({ ...p, lugar: 'presentacion' as const, prioridad: 1 })),
+  ];
 }

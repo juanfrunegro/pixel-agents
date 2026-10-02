@@ -197,3 +197,40 @@
     opacity: 0.3;
   }
 }
+
+/* Personal: señales en la tarjeta del agente (mano que saluda pidiendo permiso, humo que sube). */
+.senal-mano {
+  animation: senal-mano 0.9s ease-in-out infinite;
+  transform-origin: bottom center;
+}
+.senal-humo {
+  animation: senal-humo 2s ease-out infinite;
+}
+@keyframes senal-mano {
+  0%,
+  100% {
+    transform: rotate(-12deg) translateY(0);
+  }
+  50% {
+    transform: rotate(12deg) translateY(-2px);
+  }
+}
+@keyframes senal-humo {
+  0% {
+    opacity: 0.2;
+    transform: translateY(4px) scale(0.8);
+  }
+  40% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-8px) scale(1.3);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .senal-mano,
+  .senal-humo {
+    animation: none;
+  }
+}
