@@ -11,7 +11,14 @@ import {
   hablando,
   TURNO_SEG,
 } from '../src/personal/burbujas.js';
-import { alMensaje, despiertaA, dormidoDe, esWsl, registrarSub } from '../src/personal/personal.js';
+import {
+  alMensaje,
+  despiertaA,
+  dormidoDe,
+  esWsl,
+  registrarSub,
+  statusDe,
+} from '../src/personal/personal.js';
 
 function personaje(id: number, cambios: Partial<Character> = {}): Character {
   return {
@@ -104,5 +111,21 @@ describe('agentes hablando', () => {
     alTerminarSub(1, -1, t0);
     expect([...hablando(t0)]).toEqual([-1]);
     expect([...hablando(t0 + 400)]).toEqual([1]);
+  });
+});
+
+describe('texto de la herramienta de cada personaje', () => {
+  it('guarda el de la sesión y el de sus sub-agentes', () => {
+    alMensaje({ type: 'agentToolStart', id: 301, toolId: 't1', status: 'Editing cobros.ts' });
+    registrarSub(-301, 301, 'toolu_sub301');
+    alMensaje({
+      type: 'subagentToolStart',
+      id: 301,
+      parentToolId: 'toolu_sub301',
+      toolId: 't2',
+      status: 'Reading facturas.md',
+    });
+    expect(statusDe(301)).toBe('Editing cobros.ts');
+    expect(statusDe(-301)).toBe('Reading facturas.md');
   });
 });

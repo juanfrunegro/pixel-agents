@@ -3,7 +3,7 @@
  * "Recargar" (antes: ~/.claude/tools/pixel-oficina/generar.py con Pixel apagado).
  *
  * Toma la sala de trabajo del plano original (escritorios, 4 sillas y 2 bancos), le suma al costado un anexo con
- * biblioteca y pizarrón (adonde van los agentes según lo que hacen, ver webview-ui/src/personal/lugares.ts) y la repite
+ * biblioteca, pizarrón, atril y mesa contable (adonde van los agentes según lo que hacen, ver webview-ui/src/personal/lugares.ts) y la repite
  * en una grilla de 3 columnas, una por proyecto de Orca más "Otros". Cada sala es un Área y cada proyecto cae en la suya. Los uid de los
  * muebles llevan el nombre de la sala, así que una sala que ya existía conserva sus asientos al recargar.
  */
@@ -168,6 +168,8 @@ export const MUEBLES_ANEXO: Array<{ id: string; type: string; col: number; row: 
   { id: 'biblio-1', type: 'DOUBLE_BOOKSHELF', col: 11, row: 9 },
   { id: 'biblio-2', type: 'DOUBLE_BOOKSHELF', col: 13, row: 9 },
   { id: 'pizarron', type: 'WHITEBOARD', col: 15, row: 9 },
+  { id: 'atril', type: 'EASEL', col: 15, row: 14 },
+  { id: 'mesa-contable', type: 'MESA_CONTABLE', col: 12, row: 15 },
   { id: 'planta-1', type: 'PLANT', col: 11, row: 19 },
   { id: 'planta-2', type: 'LARGE_PLANT', col: 15, row: 18 },
 ];

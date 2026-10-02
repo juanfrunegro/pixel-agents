@@ -106,7 +106,7 @@ describe('personal: oficina según los proyectos de Orca', () => {
     const muebles = l.furniture as Array<{ uid: string; type: string; col: number; row: number }>;
     const anexo = muebles.filter((f) => f.uid.startsWith('anexo-'));
     expect(anexo.map((f) => f.type)).toEqual(
-      expect.arrayContaining(['DOUBLE_BOOKSHELF', 'WHITEBOARD']),
+      expect.arrayContaining(['DOUBLE_BOOKSHELF', 'WHITEBOARD', 'EASEL', 'MESA_CONTABLE']),
     );
     expect(anexo.some((f) => /CHAIR|BENCH/.test(f.type))).toBe(false);
     // Fila 0 = margen; la sala arranca en la fila 1 (fila 9 del plano original).
@@ -118,6 +118,20 @@ describe('personal: oficina según los proyectos de Orca', () => {
     expect(en(13, 10)).toBe(0); // pared de arriba del anexo
     const areas = l.areaTiles as Array<string | null>;
     expect(areas[(15 - 8) * cols + 13]).toBe('ERP');
+  });
+
+  it('los muebles nuevos del anexo existen como assets (manifest y png del mismo tamaño)', () => {
+    const dir = path.join(__dirname, '..', '..', 'webview-ui', 'public', 'assets', 'furniture');
+    for (const id of ['EASEL', 'MESA_CONTABLE']) {
+      const m = JSON.parse(fs.readFileSync(path.join(dir, id, 'manifest.json'), 'utf8')) as {
+        id: string;
+        width: number;
+        height: number;
+      };
+      expect(m.id).toBe(id);
+      const png = fs.readFileSync(path.join(dir, id, `${id}.png`));
+      expect([png.readUInt32BE(16), png.readUInt32BE(20)]).toEqual([m.width, m.height]);
+    }
   });
 
   it('lee los proyectos del archivo de Orca y no rompe si no existe', () => {

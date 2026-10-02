@@ -2,7 +2,7 @@
  * Personal (copia de juanfrunegro): comportamiento extra de los personajes, un paso por cuadro desde
  * OfficeState.update().
  * - Dormido (sin tokens): vuelve a su silla y se queda quieto, sin teclear ni pasear.
- * - Mientras trabaja, va al lugar de lo que está haciendo (biblioteca, pizarrón; ver lugares.ts) y vuelve a su
+ * - Mientras trabaja, va al lugar de lo que está haciendo (biblioteca, pizarrón, atril, mesa contable; ver lugares.ts) y vuelve a su
  *   escritorio para escribir código. Se queda al menos PERMANENCIA_MS en cada lugar para no ir y venir con cada
  *   herramienta. Al terminar el turno, el original lo devuelve a su silla.
  */
@@ -12,7 +12,7 @@ import { isWalkable } from '../office/layout/tileMap.js';
 import type { Character } from '../office/types.js';
 import { CharacterState } from '../office/types.js';
 import { actividadDe, elegirPunto, type Punto, puntosDeLugares } from './lugares.js';
-import { dormidoDe } from './personal.js';
+import { dormidoDe, padreDe, statusDe } from './personal.js';
 
 export const PERMANENCIA_MS = 5000;
 
@@ -44,7 +44,12 @@ function salaDe(os: OfficeState, ch: Character): string | null {
 /** Decide el lugar de un agente que trabaja. Devuelve true si cambió de lugar. */
 export function moverSegunActividad(os: OfficeState, ch: Character, ahora: number): boolean {
   // Sin herramienta (pensando) se queda donde está.
-  const deseado = ch.currentTool ? actividadDe(ch.currentTool) : (ch.lugar ?? null);
+  const padre = padreDe(ch.id);
+  const proyecto =
+    ch.folderName ?? (padre !== null ? os.characters.get(padre)?.folderName : undefined);
+  const deseado = ch.currentTool
+    ? actividadDe(ch.currentTool, statusDe(ch.id), proyecto)
+    : (ch.lugar ?? null);
   if (deseado === (ch.lugar ?? null)) return false;
   if (ch.lugarDesde !== undefined && ahora - ch.lugarDesde < PERMANENCIA_MS) return false;
   ch.lugar = deseado;

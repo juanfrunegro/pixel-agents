@@ -54,6 +54,8 @@ export function formatToolStatus(toolName: string, input?: unknown): string {
         ? `Subtask: ${desc.length > TASK_DESCRIPTION_DISPLAY_MAX_LENGTH ? desc.slice(0, TASK_DESCRIPTION_DISPLAY_MAX_LENGTH) + '\u2026' : desc}${metaDeSubagente(inp)}`
         : `Running subtask${metaDeSubagente(inp)}`;
     }
+    case 'Skill': // personal: con el nombre de la skill (el atril de la oficina lo usa para saber si es diseño)
+      return typeof inp.skill === 'string' && inp.skill ? `Skill: ${inp.skill}` : 'Using Skill';
     case 'AskUserQuestion':
       return 'Waiting for your answer';
     case 'EnterPlanMode':

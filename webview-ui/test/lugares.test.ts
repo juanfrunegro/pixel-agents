@@ -46,6 +46,25 @@ const plano = {
 };
 const caminable = (c: number, r: number) => c >= 0 && c < 6 && r >= 1 && r < 5;
 
+describe('atril y mesa contable: de qué se trata la tarea', () => {
+  it.each([
+    ['Artifact', 'Using Artifact', undefined, 'atril'],
+    ['mcp__figma__get_design', 'Using mcp__figma__get_design', undefined, 'atril'],
+    ['Skill', 'Skill: ui-ux-pro-max', undefined, 'atril'],
+    ['Edit', 'Editing globals.css', undefined, 'atril'],
+    ['Skill', 'Skill: blueprint', undefined, 'pizarron'],
+    ['Edit', 'Editing cobranzas.ts', 'ERP', 'contable'],
+    ['Read', 'Reading conciliacion.md', 'ERP', 'contable'],
+    ['Bash', 'Running: python facturas.py', undefined, 'contable'],
+    ['Bash', 'Running: python resumen.py', 'Finanzas', 'contable'],
+    ['Bash', 'Running: npm test', 'ERP', null],
+    ['Edit', 'Editing page.tsx', 'Finanzas', null],
+    ['Read', 'Reading page.tsx', 'ERP', 'biblioteca'],
+  ])('%s "%s" (%s) → %s', (tool, status, proyecto, lugar) => {
+    expect(actividadDe(tool, status, proyecto)).toBe(lugar);
+  });
+});
+
 describe('puntos de cada lugar', () => {
   const puntos = puntosDeLugares(plano, (t) => huellas[t], caminable);
 

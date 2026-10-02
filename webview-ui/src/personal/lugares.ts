@@ -1,9 +1,14 @@
 /**
  * Personal (copia de juanfrunegro): adónde va cada agente según lo que está haciendo. Todo el criterio vive acá.
  *
+ *   atril       ← diseño o UI: herramientas de diseño (Artifact, Figma, Canva…), skills de diseño (ui-ux-pro-max,
+ *                 frontend-design…) o archivos de estilos/imágenes (.css, .svg, .png…)
+ *   contable    ← plata: la tarea (archivo o comando) habla de cobros, pagos, contabilidad, facturas, conciliación,
+ *                 finanzas, ingresos, gastos o impuestos; o es el proyecto Finanzas corriendo un comando
  *   biblioteca  ← leer, buscar, investigar en la web (Read, Grep, Glob, WebFetch, WebSearch, consultas de MCP)
- *   pizarrón    ← planificar (TodoWrite, tareas, plan mode, skills)
+ *   pizarrón    ← planificar (TodoWrite, tareas, plan mode, otras skills)
  *   (nada)      ← escribir código o correr comandos (Edit, Write, Bash…): su escritorio, como en el original
+ * En ese orden: atril y contable miran de qué se trata la tarea, los otros solo la herramienta.
  *
  * Los lugares salen de los muebles del plano (cualquier plano, también uno editado a mano): el tile libre de adelante de
  * cada biblioteca o pizarrón, dentro de la misma sala que el agente.
@@ -11,7 +16,7 @@
 import type { Direction, PlacedFurniture } from '../office/types.js';
 import { Direction as Dir } from '../office/types.js';
 
-export type Lugar = 'biblioteca' | 'pizarron';
+export type Lugar = 'biblioteca' | 'pizarron' | 'atril' | 'contable';
 
 const BIBLIOTECA = new Set([
   'Read',
@@ -38,9 +43,25 @@ const PIZARRON = new Set([
 /** Herramientas de MCP que solo consultan (supabase list_tables, github search_code, etc.). */
 const MCP_CONSULTA = /^mcp__.+__(search|list|get|read|query|fetch|describe|explain)/i;
 
-/** Lugar para una herramienta, o null = su escritorio. */
-export function actividadDe(tool: string | null | undefined): Lugar | null {
+const DISENO_TOOL = /artifact|design|figma|canva|excalidraw|image/i;
+const DISENO_TEXTO =
+  /skill:\s*(ui-ux|frontend-design|artifact-design|artifact-diagramming|dataviz|brand)|\.(css|scss|svg|png|jpe?g|fig)\b/i;
+const PLATA =
+  /cobr|pagos?\b|pago[-_]|contab|factur|concili|finanz|ingreso|gasto|impuesto|ganancia|binance|tesorer/i;
+
+/**
+ * Lugar para lo que está haciendo, o null = su escritorio. `status` es el texto de la herramienta ("Editing
+ * cobros.ts", "Running: …", "Skill: ui-ux-pro-max") y `proyecto` la sala del agente.
+ */
+export function actividadDe(
+  tool: string | null | undefined,
+  status?: string,
+  proyecto?: string,
+): Lugar | null {
   if (!tool) return null;
+  const texto = status ?? '';
+  if (DISENO_TOOL.test(tool) || DISENO_TEXTO.test(texto)) return 'atril';
+  if (PLATA.test(texto) || (proyecto === 'Finanzas' && tool === 'Bash')) return 'contable';
   if (BIBLIOTECA.has(tool) || MCP_CONSULTA.test(tool)) return 'biblioteca';
   if (PIZARRON.has(tool)) return 'pizarron';
   return null;
@@ -51,6 +72,8 @@ export function lugarDeMueble(tipo: string): Lugar | null {
   const base = tipo.split(':')[0];
   if (base === 'BOOKSHELF' || base === 'DOUBLE_BOOKSHELF') return 'biblioteca';
   if (base === 'WHITEBOARD') return 'pizarron';
+  if (base === 'EASEL') return 'atril';
+  if (base === 'MESA_CONTABLE') return 'contable';
   return null;
 }
 

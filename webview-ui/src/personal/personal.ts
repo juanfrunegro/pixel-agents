@@ -29,6 +29,7 @@ interface Estado {
   metaPorTool: Map<string, MetaSub>;
   subs: Map<number, { padre: number; toolId: string }>;
   inicio: Map<number, number>;
+  status: Map<number, string>;
   version: number;
 }
 
@@ -40,6 +41,7 @@ const estado: Estado = {
   metaPorTool: new Map(),
   subs: new Map(),
   inicio: new Map(),
+  status: new Map(),
   version: 0,
 };
 
@@ -69,6 +71,14 @@ export function alMensaje(msg: any): void {
     if (meta && typeof msg.toolId === 'string') {
       estado.metaPorTool.set(msg.toolId, meta);
       avisar();
+    }
+  }
+  // Texto de la herramienta en curso de cada personaje (para saber de qué se trata: lugares.ts).
+  if (msg?.type === 'agentToolStart' && typeof msg.status === 'string') {
+    estado.status.set(msg.id, msg.status);
+  } else if (msg?.type === 'subagentToolStart' && typeof msg.status === 'string') {
+    for (const [subId, s] of estado.subs) {
+      if (s.padre === msg.id && s.toolId === msg.parentToolId) estado.status.set(subId, msg.status);
     }
   }
   if (msg?.type === 'agentNamesLoaded') {
@@ -183,6 +193,11 @@ export function despiertaA(charId: number): Date | null {
 export function esWsl(charId: number): boolean {
   const s = estado.subs.get(charId);
   return estado.info.get(s ? s.padre : charId)?.wsl === true;
+}
+
+/** Texto de la última herramienta que arrancó ("Editing cobros.ts"…). */
+export function statusDe(charId: number): string | undefined {
+  return estado.status.get(charId);
 }
 
 export function inicioDe(charId: number): number | undefined {
