@@ -19,6 +19,7 @@ import {
 } from '../office/toolUtils.js';
 import type { OfficeLayout, ToolActivity } from '../office/types.js';
 import { setWallSprites } from '../office/wallTiles.js';
+import { alLanzarSub, alTerminarSub } from '../personal/burbujas.js';
 import { alMensaje, registrarSub } from '../personal/personal.js';
 import { isBrowserRuntime, isE2E } from '../runtime.js';
 import { transport } from '../transport/index.js';
@@ -405,6 +406,7 @@ export function useExtensionMessages(
           const label = status.startsWith('Subtask:') ? status.slice('Subtask:'.length).trim() : '';
           const subId = os.addSubagent(id, toolId);
           registrarSub(subId, id, toolId, os.characters.get(subId), getLoadedCharacterCount()); // personal
+          alLanzarSub(id, subId); // personal: los dos hablando
           setSubagentCharacters((prev) => {
             if (prev.some((s) => s.id === subId)) return prev;
             return [...prev, { id: subId, parentAgentId: id, parentToolId: toolId, label }];
@@ -605,6 +607,8 @@ export function useExtensionMessages(
           }
           return { ...prev, [id]: next };
         });
+        const subTermina = os.getSubagentId(id, parentToolId);
+        if (subTermina !== null) alTerminarSub(id, subTermina); // personal: le cuenta al que lo lanzó
         // Remove sub-agent character
         os.removeSubagent(id, parentToolId);
         setSubagentCharacters((prev) =>

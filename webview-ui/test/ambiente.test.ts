@@ -4,6 +4,13 @@ import type { OfficeState } from '../src/office/engine/officeState.js';
 import type { Character } from '../src/office/types.js';
 import { CharacterState } from '../src/office/types.js';
 import { tickPersonal } from '../src/personal/ambiente.js';
+import {
+  _reiniciarConversaciones,
+  alLanzarSub,
+  alTerminarSub,
+  hablando,
+  TURNO_SEG,
+} from '../src/personal/burbujas.js';
 import { alMensaje, despiertaA, dormidoDe, esWsl, registrarSub } from '../src/personal/personal.js';
 
 function personaje(id: number, cambios: Partial<Character> = {}): Character {
@@ -75,5 +82,27 @@ describe('sesiones de WSL', () => {
     expect(esWsl(-201)).toBe(true);
     expect(esWsl(202)).toBe(false);
     expect(esWsl(999)).toBe(false);
+  });
+});
+
+describe('agentes hablando', () => {
+  it('al lanzar un sub-agente hablan por turnos: el que lo lanza, el sub-agente, y otra vez', () => {
+    _reiniciarConversaciones();
+    const t0 = 1_000_000;
+    alLanzarSub(1, -1, t0);
+    const turno = TURNO_SEG * 1000;
+    expect([...hablando(t0)]).toEqual([1]);
+    expect([...hablando(t0 + turno)]).toEqual([-1]);
+    expect([...hablando(t0 + 2 * turno)]).toEqual([1]);
+    expect([...hablando(t0 + 3 * turno)]).toEqual([-1]);
+    expect([...hablando(t0 + 4 * turno)]).toEqual([]);
+  });
+
+  it('al terminar, el sub-agente habla mientras se desvanece y después el que lo lanzó', () => {
+    _reiniciarConversaciones();
+    const t0 = 2_000_000;
+    alTerminarSub(1, -1, t0);
+    expect([...hablando(t0)]).toEqual([-1]);
+    expect([...hablando(t0 + 400)]).toEqual([1]);
   });
 });

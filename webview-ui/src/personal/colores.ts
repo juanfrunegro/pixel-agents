@@ -7,3 +7,6 @@ export const COLOR_SIN_MODELO = '#9aa0ab';
 
 /** Personal: colores de los dibujos propios encima de los personajes (Zzz, diálogo, gafete WSL). */
 export const COLOR_ZZZ = '#9FB7FF';
+export const COLOR_BURBUJA_BORDE = '#555566';
+export const COLOR_BURBUJA_FONDO = '#EEEEFF';
+export const COLOR_BURBUJA_TEXTO = '#8888AA';
