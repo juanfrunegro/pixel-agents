@@ -7,8 +7,10 @@ import type { Character, Seat, TileType as TileTypeVal } from '../src/office/typ
 import { CharacterState, Direction, TileType } from '../src/office/types.js';
 import { tickPersonal } from '../src/personal/ambiente.js';
 import { _reiniciarConversaciones, alLanzarSub, hablando } from '../src/personal/burbujas.js';
+import { enCafeteria, separarEtiquetas } from '../src/personal/etiquetas.js';
 import { apagadoPorFiltro, filtroSistema, setFiltroSistema } from '../src/personal/filtro.js';
-import { alMensaje, registrarSub } from '../src/personal/personal.js';
+import { elegirPunto } from '../src/personal/lugares.js';
+import { alMensaje, enUso, registrarSub, SIN_USO_MS } from '../src/personal/personal.js';
 import {
   _reiniciarReuniones,
   CALENTAMIENTO_MS,
@@ -97,6 +99,7 @@ describe('cafetería: los que no están trabajando', () => {
     expect(a.lugar).toBe('cafeteria');
     expect(a.destino).toMatchObject({ seatCol: 5, seatRow: 2, sentado: true });
     a.isActive = true;
+    a.currentTool = 'Edit';
     tickPersonal(os, T0 + 100); // sin esperar PERMANENCIA_MS
     expect(a.lugar).not.toBe('cafeteria');
     expect(a.destino).toBeUndefined();
@@ -145,7 +148,7 @@ describe('cafetería: los que no están trabajando', () => {
 
 describe('reuniones', () => {
   it('al lanzar un sub-agente van los dos a sillas vecinas de Reuniones, hablan al llegar y después vuelven', () => {
-    const padre = agente(801, 's1', { isActive: true });
+    const padre = agente(801, 's1', { isActive: true, currentTool: 'Agent' });
     const sub = createCharacter(-801, 0, null, null);
     Object.assign(sub, {
       isSubagent: true,
@@ -195,8 +198,8 @@ describe('reuniones', () => {
   });
 
   it('dos sesiones del mismo proyecto: reunión corta cuando la segunda se pone a trabajar', () => {
-    const a = agente(821, 's1', { isActive: true });
-    const b = agente(822, 's2', { isActive: false });
+    const a = agente(821, 's1', { isActive: true, currentTool: 'Edit' });
+    const b = agente(822, 's2', { isActive: false, currentTool: 'Edit' });
     const os = oficina([a, b]);
     tickPersonal(os, T0); // primera vez: solo mira quién está
     tickPersonal(os, T0 + CALENTAMIENTO_MS + 1);
@@ -275,6 +278,112 @@ describe('caminar a la cafetería (inactivo con destino)', () => {
       CharacterState.IDLE,
       Direction.LEFT,
     ]);
+  });
+});
+
+describe('sesiones sin uso (restauradas al abrir la página)', () => {
+  it('activa pero sin herramienta ni trabajo reciente va a la cafetería; con trabajo reciente se queda', () => {
+    const ahora = Date.now();
+    const quieta = agente(751, 's1', { isActive: true });
+    const trabajando = agente(752, 's2', { isActive: true });
+    alMensaje({ type: 'agentToolDone', id: 752, toolId: 'x' });
+    expect(enUso(quieta, ahora)).toBe(false);
+    expect(enUso(trabajando, ahora)).toBe(true);
+    expect(enUso(trabajando, ahora + SIN_USO_MS + 1)).toBe(false);
+    tickPersonal(oficina([quieta, trabajando]), ahora);
+    expect(quieta.lugar).toBe('cafeteria');
+    expect(quieta.destino).toMatchObject({ sentado: true, descanso: true });
+    expect(trabajando.lugar).not.toBe('cafeteria');
+    // Arranca una herramienta: vuelve a su escritorio.
+    quieta.currentTool = 'Edit';
+    tickPersonal(oficina([quieta, trabajando]), ahora + 100);
+    expect(quieta.destino).toBeUndefined();
+  });
+
+  it('en la cafetería no teclea aunque la sesión figure activa', () => {
+    const tileMap: TileTypeVal[][] = Array.from({ length: 6 }, () =>
+      Array(8).fill(TileType.FLOOR_1),
+    );
+    const silla: Seat = {
+      uid: 's',
+      seatCol: 1,
+      seatRow: 4,
+      facingDir: Direction.UP,
+      assigned: true,
+    };
+    const ch = createCharacter(3, 0, 's', silla);
+    ch.isActive = true;
+    ch.destino = {
+      seatCol: 6,
+      seatRow: 2,
+      facingDir: Direction.DOWN,
+      sentado: true,
+      descanso: true,
+    };
+    for (let t = 0; t < 10; t += 0.05)
+      updateCharacter(ch, 0.05, [], new Map([['s', silla]]), tileMap, new Set());
+    expect([ch.tileCol, ch.tileRow, ch.state, ch.frame]).toEqual([6, 2, CharacterState.TYPE, 0]);
+  });
+});
+
+describe('agentes juntos sin pisarse', () => {
+  it('los sub-agentes que aparecen en el mismo lugar van a lugares distintos al lado del padre', () => {
+    const padre = agente(761, 's1', { isActive: true });
+    const subs = [-761, -762, -763].map((id) => {
+      const sub = createCharacter(id, 0, null, null);
+      Object.assign(sub, {
+        isSubagent: true,
+        isActive: true,
+        tileCol: 3,
+        tileRow: 5,
+        parentAgentId: 761,
+      });
+      return sub;
+    });
+    tickPersonal(oficina([padre, ...subs]), T0);
+    const tiles = subs.map((x) => `${x.destino?.seatCol},${x.destino?.seatRow}`);
+    expect(new Set(tiles).size).toBe(3);
+    for (const x of subs) {
+      expect(
+        Math.abs(x.destino!.seatCol - 1) + Math.abs(x.destino!.seatRow - 3),
+      ).toBeLessThanOrEqual(4);
+    }
+  });
+
+  it('en la cafetería se reparten entre los livings en vez de amontonarse', () => {
+    const asiento = (col: number) => ({
+      lugar: 'cafeteria' as const,
+      col,
+      row: 2,
+      facingDir: Direction.DOWN,
+      area: SALA_CAFETERIA,
+      sentado: true,
+      prioridad: 0,
+    });
+    const puntos = [asiento(1), asiento(2), asiento(9)];
+    // Con el sillón 1 ocupado, el 2 (pegado) queda más cerca pero elige el 9.
+    expect(elegirPunto(puntos, 'cafeteria', { col: 0, row: 2 }, new Set(['1,2']), true)?.col).toBe(
+      9,
+    );
+    // Sin separar (otros lugares), el más cercano.
+    expect(elegirPunto(puntos, 'cafeteria', { col: 0, row: 2 }, new Set(['1,2']))?.col).toBe(2);
+  });
+
+  it('los que descansan en la cafetería no muestran tarjeta (salvo al pasar el mouse)', () => {
+    const d = { seatCol: 5, seatRow: 2, facingDir: Direction.DOWN, sentado: true, descanso: true };
+    expect(enCafeteria({ tileCol: 5, tileRow: 2, destino: d })).toBe(true);
+    expect(enCafeteria({ tileCol: 4, tileRow: 2, destino: d })).toBe(false); // todavía caminando
+    expect(enCafeteria({ tileCol: 5, tileRow: 2, destino: { ...d, descanso: false } })).toBe(false);
+  });
+
+  it('las tarjetas que chocan suben; las separadas no se mueven', () => {
+    const s = separarEtiquetas([
+      { id: 1, x: 100, y: 300 },
+      { id: 2, x: 130, y: 300 },
+      { id: 3, x: 400, y: 300 },
+    ]);
+    expect(s.get(3)).toBe(0);
+    expect([s.get(1), s.get(2)].sort()).toEqual([0, 50]);
   });
 });
 

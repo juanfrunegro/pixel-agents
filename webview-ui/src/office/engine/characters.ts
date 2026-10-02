@@ -110,7 +110,7 @@ export function updateCharacter(
   switch (ch.state) {
     case CharacterState.TYPE: {
       // personal: inactivo con destino (cafetería, reunión): sentado quieto ahí, sin pasear; si cambió, se levanta
-      if (!ch.isActive && ch.destino) {
+      if ((!ch.isActive || ch.destino?.descanso) && ch.destino) {
         ch.frame = 0;
         ch.frameTimer = 0;
         if (ch.tileCol !== ch.destino.seatCol || ch.tileRow !== ch.destino.seatRow) {

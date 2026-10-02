@@ -220,9 +220,10 @@ function oficina(conMesaContable: boolean): Contenido {
       m.push({ id: `banco-${k}`, type: 'CUSHIONED_BENCH', dx: dx + 1, dy: dy + 2 });
     }
   }
-  m.push({ id: 'reloj', type: 'CLOCK', dx: 1, dy: PARED_ARRIBA });
-  m.push({ id: 'cuadro-1', type: 'SMALL_PAINTING', dx: 5, dy: PARED_ARRIBA });
-  m.push({ id: 'cuadro-2', type: 'SMALL_PAINTING_2', dx: 9, dy: PARED_ARRIBA });
+  // El medio de la pared de arriba queda libre: ahí va el nombre de la sala.
+  m.push({ id: 'reloj', type: 'CLOCK', dx: 0, dy: PARED_ARRIBA });
+  m.push({ id: 'cuadro-1', type: 'SMALL_PAINTING', dx: 9, dy: PARED_ARRIBA });
+  m.push({ id: 'cuadro-2', type: 'SMALL_PAINTING_2', dx: 10, dy: PARED_ARRIBA });
   return { muebles: m, puertas: [3, 7] };
 }
 
@@ -240,8 +241,8 @@ function brain(): Contenido {
   m.push({ id: 'planta-1', type: 'PLANT', dx: 0, dy: 0 });
   m.push({ id: 'planta-2', type: 'PLANT_2', dx: 0, dy: 4 });
   m.push({ id: 'planta-grande', type: 'LARGE_PLANT', dx: 16, dy: 0 });
-  m.push({ id: 'cuadro', type: 'LARGE_PAINTING', dx: 7, dy: PARED_ARRIBA });
-  m.push({ id: 'reloj', type: 'CLOCK', dx: 12, dy: PARED_ARRIBA });
+  m.push({ id: 'cuadro', type: 'LARGE_PAINTING', dx: 17, dy: PARED_ARRIBA });
+  m.push({ id: 'reloj', type: 'CLOCK', dx: 13, dy: PARED_ARRIBA });
   m.push({ id: 'planta-colgante', type: 'HANGING_PLANT', dx: 4, dy: PARED_ARRIBA });
   return { muebles: m, puertas: [1, 15] };
 }
@@ -252,16 +253,16 @@ function diseno(): Contenido {
   for (const dy of [0, 3]) {
     for (const dx of [1, 3, 5, 7]) m.push({ id: `atril-${dy}-${dx}`, type: 'EASEL', dx, dy });
   }
-  m.push({ id: 'cuadro-grande', type: 'LARGE_PAINTING', dx: 2, dy: PARED_ARRIBA });
-  m.push({ id: 'cuadro', type: 'SMALL_PAINTING', dx: 6, dy: PARED_ARRIBA });
+  m.push({ id: 'cuadro-grande', type: 'LARGE_PAINTING', dx: 0, dy: PARED_ARRIBA });
+  m.push({ id: 'cuadro', type: 'SMALL_PAINTING', dx: 7, dy: PARED_ARRIBA });
   m.push({ id: 'planta-colgante', type: 'HANGING_PLANT', dx: 8, dy: PARED_ARRIBA });
   return { muebles: m, puertas: [0, 4] };
 }
 
-/** Biblioteca: bibliotecas en la pared y dos islas de estantes, con la entrada en el medio. */
+/** Biblioteca: bibliotecas en la pared y dos islas de estantes, con la entrada (y el nombre) en el medio. */
 function biblioteca(): Contenido {
   const m: MuebleRelativo[] = [];
-  for (const dx of [0, 2, 4, 6, 10, 12, 14, 16]) {
+  for (const dx of [0, 2, 4, 12, 14, 16]) {
     m.push({ id: `pared-${dx}`, type: 'DOUBLE_BOOKSHELF', dx, dy: PARED_ARRIBA });
   }
   for (const dx of [1, 4, 12, 15]) {
@@ -289,7 +290,7 @@ function reuniones(): Contenido {
   }
   m.push({ id: 'pizarron-1', type: 'WHITEBOARD', dx: 14, dy: PARED_ARRIBA });
   m.push({ id: 'pizarron-2', type: 'WHITEBOARD', dx: 16, dy: PARED_ARRIBA });
-  m.push({ id: 'reloj', type: 'CLOCK', dx: 10, dy: PARED_ARRIBA });
+  m.push({ id: 'reloj', type: 'CLOCK', dx: 3, dy: PARED_ARRIBA });
   m.push({ id: 'planta-colgante', type: 'HANGING_PLANT', dx: 1, dy: PARED_ARRIBA });
   m.push({ id: 'planta', type: 'LARGE_PLANT', dx: 15, dy: 3 });
   return { muebles: m, puertas: [6, 13] };
@@ -312,23 +313,25 @@ function cafeteria(): Contenido {
   m.push({ id: 'mesita', type: 'SMALL_TABLE_FRONT', dx: 1, dy: 5 });
   m.push({ id: 'cafe-mesita', type: 'COFFEE', dx: 2, dy: 6 });
   m.push({ id: 'planta', type: 'PLANT_2', dx: 9, dy: 5 });
-  m.push({ id: 'cuadro', type: 'SMALL_PAINTING_2', dx: 2, dy: PARED_ARRIBA });
-  m.push({ id: 'cuadro-grande', type: 'LARGE_PAINTING', dx: 7, dy: PARED_ARRIBA });
+  m.push({ id: 'cuadro', type: 'SMALL_PAINTING_2', dx: 0, dy: PARED_ARRIBA });
+  m.push({ id: 'cuadro-grande', type: 'LARGE_PAINTING', dx: 8, dy: PARED_ARRIBA });
   return { muebles: m, puertas: [5, 10] };
 }
 
-/** Presentaciones: pantalla (dos pizarrones) y dos filas de sillas mirando hacia ella. Se "prende" en la tanda 2. */
+/**
+ * Presentaciones: pantalla (pizarrón, a un costado para que el nombre de la sala se lea) y dos filas de sillas. Se
+ * "prende" en la tanda 2.
+ */
 function presentaciones(): Contenido {
   const m: MuebleRelativo[] = [];
-  m.push({ id: 'pantalla-1', type: 'WHITEBOARD', dx: 3, dy: PARED_ARRIBA });
-  m.push({ id: 'pantalla-2', type: 'WHITEBOARD', dx: 5, dy: PARED_ARRIBA });
+  m.push({ id: 'pantalla-1', type: 'WHITEBOARD', dx: 1, dy: PARED_ARRIBA });
   for (const dy of [2, 4]) {
     for (const dx of [1, 2, 3, 5, 6, 7]) {
       m.push({ id: `silla-${dy}-${dx}`, type: 'WOODEN_CHAIR_BACK', dx, dy });
     }
   }
-  m.push({ id: 'planta-colgante', type: 'HANGING_PLANT', dx: 1, dy: PARED_ARRIBA });
-  return { muebles: m, puertas: [0, 8] };
+  m.push({ id: 'planta-colgante', type: 'HANGING_PLANT', dx: 8, dy: PARED_ARRIBA });
+  return { muebles: m, puertas: [0, 4] };
 }
 
 function contenido(p: Pieza): Contenido {

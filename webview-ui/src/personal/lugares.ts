@@ -199,14 +199,16 @@ export function puntosDePiso(
 
 /**
  * El punto libre para ese lugar más cercano a `desde`: primero los de su sala (SALA_DE_LUGAR) y, si el plano no la
- * tiene, el mueble más cercano de cualquier sala. Entre los de su sala gana la prioridad y después la distancia.
- * `ocupados` son los tiles que ya eligieron otros agentes.
+ * tiene, el mueble más cercano de cualquier sala. Entre los de su sala gana la prioridad y después la distancia. Con
+ * `separar` (la cafetería) gana además el que tiene menos vecinos ocupados, para que se repartan en vez de amontonarse
+ * en el living más cercano. `ocupados` son los tiles que ya eligieron otros agentes.
  */
 export function elegirPunto(
   puntos: Punto[],
   lugar: Lugar,
   desde: { col: number; row: number },
   ocupados: Set<string>,
+  separar = false,
 ): Punto | null {
   const sala = SALA_DE_LUGAR[lugar];
   const delLugar = puntos.filter((p) => p.lugar === lugar);
@@ -217,7 +219,13 @@ export function elegirPunto(
   for (const p of candidatos) {
     if (ocupados.has(`${p.col},${p.row}`)) continue;
     const d = Math.abs(p.col - desde.col) + Math.abs(p.row - desde.row);
-    const k = (p.prioridad ?? 0) * 100_000 + d;
+    let vecinos = 0;
+    if (separar) {
+      for (let dc = -1; dc <= 1; dc++)
+        for (let dr = -1; dr <= 1; dr++)
+          if ((dc || dr) && ocupados.has(`${p.col + dc},${p.row + dr}`)) vecinos++;
+    }
+    const k = (p.prioridad ?? 0) * 100_000 + vecinos * 1_000 + d;
     if (k < clave) {
       clave = k;
       mejor = p;

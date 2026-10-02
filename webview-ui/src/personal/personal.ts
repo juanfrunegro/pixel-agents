@@ -30,6 +30,8 @@ interface Estado {
   subs: Map<number, { padre: number; toolId: string }>;
   inicio: Map<number, number>;
   status: Map<number, string>;
+  /** Último mensaje de trabajo de cada sesión (herramienta, permiso, "active"), en ms. */
+  actividad: Map<number, number>;
   version: number;
 }
 
@@ -42,8 +44,24 @@ const estado: Estado = {
   subs: new Map(),
   inicio: new Map(),
   status: new Map(),
+  actividad: new Map(),
   version: 0,
 };
+
+/** Mensajes que dicen "esta sesión está trabajando". */
+const DE_TRABAJO = new Set([
+  'agentToolStart',
+  'agentToolDone',
+  'agentToolPermission',
+  'subagentToolStart',
+  'subagentToolDone',
+  'subagentToolPermission',
+]);
+/**
+ * Sin herramienta ni mensaje de trabajo por este tiempo, una sesión cuenta como sin uso aunque el servidor no haya dicho
+ * que terminó (al abrir la página, las sesiones restauradas llegan "activas" sin nada en curso).
+ */
+export const SIN_USO_MS = 120_000;
 
 const oyentes = new Set<() => void>();
 function avisar(): void {
@@ -72,6 +90,13 @@ export function alMensaje(msg: any): void {
       estado.metaPorTool.set(msg.toolId, meta);
       avisar();
     }
+  }
+  if (
+    msg &&
+    typeof msg.id === 'number' &&
+    (DE_TRABAJO.has(msg.type) || (msg.type === 'agentStatus' && msg.status === 'active'))
+  ) {
+    estado.actividad.set(msg.id, Date.now());
   }
   // Texto de la herramienta en curso de cada personaje (para saber de qué se trata: lugares.ts).
   if (msg?.type === 'agentToolStart' && typeof msg.status === 'string') {
@@ -193,6 +218,20 @@ export function despiertaA(charId: number): Date | null {
 export function esWsl(charId: number): boolean {
   const s = estado.subs.get(charId);
   return estado.info.get(s ? s.padre : charId)?.wsl === true;
+}
+
+/**
+ * La sesión está en uso: activa y con una herramienta en curso o con trabajo hace menos de SIN_USO_MS. Los
+ * sub-agentes, mientras existan y estén activos.
+ */
+export function enUso(
+  ch: { id: number; isActive: boolean; isSubagent: boolean; currentTool: string | null },
+  ahora = Date.now(),
+): boolean {
+  if (!ch.isActive) return false;
+  if (ch.isSubagent || ch.currentTool) return true;
+  const t = estado.actividad.get(ch.id);
+  return t !== undefined && ahora - t < SIN_USO_MS;
 }
 
 /** Texto de la última herramienta que arrancó ("Editing cobros.ts"…). */

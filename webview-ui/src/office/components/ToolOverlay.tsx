@@ -18,6 +18,7 @@ import {
   TOOL_OVERLAY_VERTICAL_OFFSET,
 } from '../../constants.js';
 import type { SubagentCharacter } from '../../hooks/useExtensionMessages.js';
+import { enCafeteria, separarEtiquetas } from '../../personal/etiquetas.js';
 import { apagadoPorFiltro, useFiltroSistema } from '../../personal/filtro.js';
 import { colorModelo, modeloDe, nombreDe } from '../../personal/personal.js';
 import { estaSentado } from '../engine/characters.js';
@@ -123,6 +124,26 @@ export function ToolOverlay({
   // All character IDs
   const allIds = [...agents, ...subagentCharacters.map((s) => s.id)];
 
+  // personal: con varios agentes juntos, las tarjetas se acomodan para no pisarse
+  const subidas = separarEtiquetas(
+    allIds.flatMap((id) => {
+      const ch = officeState.characters.get(id);
+      if (!ch) return [];
+      const marcado = selectedId === id || hoveredId === id;
+      if (!alwaysShowOverlay && !marcado) return [];
+      if (apagadoPorFiltro(id, filtro) && selectedId !== id) return [];
+      if (enCafeteria(ch) && !marcado) return [];
+      const off = estaSentado(ch) ? CHARACTER_SITTING_OFFSET_PX : 0;
+      return [
+        {
+          id,
+          x: project.toScreenX(ch.x),
+          y: project.toScreenY(ch.y + off - TOOL_OVERLAY_VERTICAL_OFFSET),
+        },
+      ];
+    }),
+  );
+
   return (
     <>
       {allIds.map((id) => {
@@ -135,8 +156,10 @@ export function ToolOverlay({
 
         // Only show for hovered or selected agents (unless always-show is on)
         if (!alwaysShowOverlay && !isSelected && !isHovered) return null;
-        // personal: los apagados por el filtro Windows/WSL no llevan etiqueta (salvo el que tocaste)
+        // personal: los apagados por el filtro Windows/WSL no llevan etiqueta (salvo el que tocaste), y los que
+        // descansan en la cafetería tampoco (estar ahí ya dice "sin uso"), salvo al pasar el mouse
         if (apagadoPorFiltro(id, filtro) && !isSelected) return null;
+        if (enCafeteria(ch) && !isSelected && !isHovered) return null;
 
         // Position above character
         const sittingOffset = estaSentado(ch) ? CHARACTER_SITTING_OFFSET_PX : 0; // personal: parado no
@@ -224,7 +247,7 @@ export function ToolOverlay({
             className="absolute flex flex-col items-center -translate-x-1/2"
             style={{
               left: screenX,
-              top: screenY - (hasExtraLines ? 34 : 28),
+              top: screenY - (hasExtraLines ? 34 : 28) - (subidas.get(id) ?? 0),
               pointerEvents: isSelected ? 'auto' : 'none',
               opacity: alwaysShowOverlay && !isSelected && !isHovered ? (isSub ? 0.5 : 0.75) : 1,
               zIndex: isSelected ? 42 : 41,

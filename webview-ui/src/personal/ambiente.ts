@@ -5,8 +5,9 @@
  * 1. Sin tokens: se duerme (Zzz) en su escritorio, quieto. No va a la cafetería.
  * 2. Esperando tu PERMISO: no está inactivo, se queda en su escritorio (para que veas quién te necesita).
  * 3. En una reunión (reuniones.ts): va a una silla de Reuniones, al lado del otro, y cuando llegan hablan.
- * 4. Inactivo (terminó el turno, espera tu próximo mensaje): se va a la Cafetería y se sienta; si no hay sillones
- *    libres, se queda parado ahí. Vuelve en cuanto arranca a trabajar. Los sub-agentes no van: desaparecen al terminar.
+ * 4. Sin uso (terminó el turno, espera tu próximo mensaje, o una sesión restaurada sin nada en curso; ver enUso en
+ *    personal.ts): se va a la Cafetería y se sienta; si no hay sillones libres, se queda parado ahí. Vuelve en cuanto
+ *    arranca a trabajar. Los sub-agentes no van: desaparecen al terminar.
  * 5. Trabajando: va al lugar de lo que está haciendo (biblioteca, atril, pizarrón, mesa contable; ver lugares.ts) o a
  *    su escritorio para escribir código. Se queda al menos PERMANENCIA_MS en cada lugar para no ir y venir con cada
  *    herramienta. El "escritorio" de un sub-agente es el piso libre más cercano a la silla del que lo lanzó.
@@ -27,7 +28,7 @@ import {
   puntosDeLugares,
   puntosDePiso,
 } from './lugares.js';
-import { dormidoDe, padreDe, statusDe } from './personal.js';
+import { dormidoDe, enUso, padreDe, statusDe } from './personal.js';
 import {
   DURACION_PROYECTO_MS,
   ESPERA_LLEGADA_MS,
@@ -83,18 +84,23 @@ function ocupadosPara(os: OfficeState, ch: Character): Set<string> {
 
 // ── El escritorio de cada uno ───────────────────────────────────
 
-/** El "escritorio" de cada sub-agente: el piso libre más cercano a la silla del que lo lanzó. */
+/**
+ * El "escritorio" de cada sub-agente: el piso libre más cercano a la silla del que lo lanzó, sin pegarse a otro
+ * sub-agente (al menos un tile de por medio, para que no se pisen ni sus etiquetas).
+ */
 const bases = new Map<number, { col: number; row: number }>();
 
 function baseDe(os: OfficeState, sub: Character): { col: number; row: number } {
   const padre = sub.parentAgentId !== null ? os.characters.get(sub.parentAgentId) : undefined;
   const silla = padre?.seatId ? os.seats.get(padre.seatId) : undefined;
   if (!silla) return { col: sub.tileCol, row: sub.tileRow };
-  const tomados = new Set([...bases.values()].map((b) => `${b.col},${b.row}`));
+  const otras = [...bases.values()];
+  const pegado = (t: { col: number; row: number }) =>
+    otras.some((b) => Math.max(Math.abs(b.col - t.col), Math.abs(b.row - t.row)) < 2);
   let mejor = { col: sub.tileCol, row: sub.tileRow };
   let dist = Infinity;
   for (const t of os.walkableTiles) {
-    if (tomados.has(`${t.col},${t.row}`)) continue;
+    if (pegado(t)) continue;
     const d = Math.abs(t.col - silla.seatCol) + Math.abs(t.row - silla.seatRow);
     if (d > 0 && d < dist) {
       dist = d;
@@ -127,9 +133,15 @@ function ir(
   const desde =
     cerca ??
     (silla ? { col: silla.seatCol, row: silla.seatRow } : { col: ch.tileCol, row: ch.tileRow });
-  const p = elegirPunto(puntos(os), lugar, desde, ocupadosPara(os, ch));
+  const p = elegirPunto(puntos(os), lugar, desde, ocupadosPara(os, ch), lugar === 'cafeteria');
   ch.destino = p
-    ? { seatCol: p.col, seatRow: p.row, facingDir: p.facingDir, sentado: p.sentado === true }
+    ? {
+        seatCol: p.col,
+        seatRow: p.row,
+        facingDir: p.facingDir,
+        sentado: p.sentado === true,
+        descanso: lugar === 'cafeteria',
+      }
     : undefined;
 }
 
@@ -173,7 +185,7 @@ function tickReuniones(os: OfficeState, ahora: number): void {
   });
   const activas: Array<{ id: number; proyecto: string | undefined }> = [];
   for (const ch of os.characters.values()) {
-    if (ch.isSubagent || !ch.isActive || ch.matrixEffect || dormidoDe(ch.id, ahora)) continue;
+    if (ch.isSubagent || !enUso(ch, ahora) || ch.matrixEffect || dormidoDe(ch.id, ahora)) continue;
     activas.push({ id: ch.id, proyecto: proyectoDe(os, ch) });
   }
   for (const { ids, proyecto } of sesionesQueSeCruzan(activas, ahora)) {
@@ -234,8 +246,8 @@ export function tickPersonal(os: OfficeState, ahora = Date.now()): void {
     }
     if (ch.lugar === 'reunion') alEscritorio(ch); // terminó la reunión: cada uno a lo suyo
 
-    // 4. Inactivo: a la cafetería.
-    if (!ch.isActive) {
+    // 4. Sin uso (terminó el turno, o restaurada al abrir la página sin nada en curso): a la cafetería.
+    if (!enUso(ch, ahora)) {
       if (ch.isSubagent) {
         if (ch.lugar !== undefined) alEscritorio(ch);
         continue;
@@ -246,6 +258,7 @@ export function tickPersonal(os: OfficeState, ahora = Date.now()): void {
 
     // 5. Trabajando.
     if (ch.lugar === 'cafeteria') alEscritorio(ch); // se puso a trabajar: vuelve ya, sin esperar
+    if (ch.isSubagent && !ch.destino && !ch.lugar) alEscritorio(ch); // a su lugar al lado del padre, no apilado
     moverSegunActividad(os, ch, ahora);
   }
 }

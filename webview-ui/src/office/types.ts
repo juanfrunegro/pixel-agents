@@ -258,7 +258,14 @@ export interface Character {
    * Va acá en vez de a su silla: mientras trabaja (biblioteca, atril…), en una reunión o, inactivo, en la cafetería.
    * `sentado` = es un asiento (se sienta); si no, se queda parado. undefined = su silla (y, inactivo, pasea).
    */
-  destino?: { seatCol: number; seatRow: number; facingDir: Direction; sentado?: boolean };
+  destino?: {
+    seatCol: number;
+    seatRow: number;
+    facingDir: Direction;
+    sentado?: boolean;
+    /** En la cafetería: quieto, sin teclear, aunque la sesión figure activa. */
+    descanso?: boolean;
+  };
   /** Lugar al que va ahora y desde cuándo (ms), para no ir y venir con cada herramienta. */
   lugar?: string | null;
   lugarDesde?: number;

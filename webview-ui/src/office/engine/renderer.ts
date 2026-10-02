@@ -255,8 +255,8 @@ export function renderAreaLabels(
   const colorMap = new Map<string, string>();
   for (const a of areas) colorMap.set(a.label, a.color);
 
-  // Centroid accumulator: label → { sumX, sumY, count }.
-  const centroids = new Map<string, { sumX: number; sumY: number; count: number }>();
+  // Centroid accumulator: label → { sumX, sumY, count, minY }.
+  const centroids = new Map<string, { sumX: number; sumY: number; count: number; minY: number }>();
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       const label = areaTiles[r * cols + c];
@@ -266,8 +266,9 @@ export function renderAreaLabels(
         acc.sumX += c;
         acc.sumY += r;
         acc.count += 1;
+        acc.minY = Math.min(acc.minY, r);
       } else {
-        centroids.set(label, { sumX: c, sumY: r, count: 1 });
+        centroids.set(label, { sumX: c, sumY: r, count: 1, minY: r });
       }
     }
   }
@@ -283,7 +284,9 @@ export function renderAreaLabels(
 
   for (const [label, acc] of centroids) {
     const cx = offsetX + (acc.sumX / acc.count + 0.5) * s;
-    const cy = offsetY + (acc.sumY / acc.count + 0.5) * s;
+    // personal: en la pared de arriba de la sala (fila libre de muebles y agentes), no en el medio del piso
+    const filaNombre = acc.minY > 0 ? acc.minY - 1 : acc.sumY / acc.count;
+    const cy = offsetY + (filaNombre + 0.5) * s;
 
     // Pixel-art drop shadow (1px right + down, no blur).
     ctx.globalAlpha = AREA_LABEL_SHADOW_ALPHA;
