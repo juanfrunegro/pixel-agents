@@ -45,7 +45,8 @@ export type ServerMessage =
   | ProyectoAbierto
   | OficinasEstado
   | OficinaAsignada
-  | SkinsPersonalesLoaded;
+  | SkinsPersonalesLoaded
+  | ConfigVoz;
 
 export type ClientMessage =
   | WebviewReady
@@ -76,7 +77,9 @@ export type ClientMessage =
   | AbrirProyecto
   | AsignarOficina
   | PedirOficinas
-  | SetVozSesion;
+  | SetVozSesion
+  | PedirConfigVoz
+  | SetConfigVoz;
 
 export interface ProviderCapabilities {
   type: 'providerCapabilities';
@@ -398,6 +401,18 @@ export interface SkinsPersonalesLoaded {
   skins: Record<string, CharacterSpriteSet>;
 }
 
+export interface ConfigVoz {
+  type: 'configVoz';
+  casos: AnonymousSchema_238;
+}
+
+export interface AnonymousSchema_238 {
+  pregunta: boolean;
+  permiso: boolean;
+  fin_pregunta: boolean;
+  esperando: boolean;
+}
+
 export interface WebviewReady {
   type: 'webviewReady';
 }
@@ -530,10 +545,10 @@ export interface RecargarOficina {
 export interface AbrirProyecto {
   type: 'abrirProyecto';
   sala: string;
-  accion: AnonymousSchema_289;
+  accion: AnonymousSchema_295;
 }
 
-export type AnonymousSchema_289 = 'carpeta' | 'vscode';
+export type AnonymousSchema_295 = 'carpeta' | 'vscode';
 
 export interface AsignarOficina {
   type: 'asignarOficina';
@@ -551,3 +566,15 @@ export interface SetVozSesion {
   id: number;
   valor: string | null;
 }
+
+export interface PedirConfigVoz {
+  type: 'pedirConfigVoz';
+}
+
+export interface SetConfigVoz {
+  type: 'setConfigVoz';
+  caso: AnonymousSchema_306;
+  valor: boolean;
+}
+
+export type AnonymousSchema_306 = 'pregunta' | 'permiso' | 'fin_pregunta' | 'esperando';

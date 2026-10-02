@@ -126,6 +126,7 @@ components:
         - $ref: '#/components/schemas/OficinasEstado'
         - $ref: '#/components/schemas/OficinaAsignada'
         - $ref: '#/components/schemas/SkinsPersonalesLoaded'
+        - $ref: '#/components/schemas/ConfigVoz'
       discriminator: type
 
     ClientMessage:
@@ -160,6 +161,8 @@ components:
         - $ref: '#/components/schemas/AsignarOficina'
         - $ref: '#/components/schemas/PedirOficinas'
         - $ref: '#/components/schemas/SetVozSesion'
+        - $ref: '#/components/schemas/PedirConfigVoz'
+        - $ref: '#/components/schemas/SetConfigVoz'
       discriminator: type
 
     # ── Personal (copia de juanfrunegro) ──────────────────────────
@@ -341,6 +344,55 @@ components:
           type: integer
         valor:
           type: [string, 'null']
+
+    PedirConfigVoz:
+      description: >-
+        Al abrir la sala de comunicaciones: pide qué casos avisan por voz (~/.pixel-agents/voz/config.json). Contesta
+        con configVoz. Solo con token.
+      type: object
+      additionalProperties: false
+      required: [type]
+      properties:
+        type:
+          const: pedirConfigVoz
+
+    SetConfigVoz:
+      description: >-
+        Prende o apaga un caso del aviso por voz ("Avisar por voz cuando:"): pregunta, permiso, fin_pregunta o
+        esperando. El servidor escribe config.json (lo leen los hooks de voz) y contesta con configVoz. Solo con token.
+      type: object
+      additionalProperties: false
+      required: [type, caso, valor]
+      properties:
+        type:
+          const: setConfigVoz
+        caso:
+          type: string
+          enum: [pregunta, permiso, fin_pregunta, esperando]
+        valor:
+          type: boolean
+
+    ConfigVoz:
+      description: Qué casos avisan por voz a las sesiones con la voz activada (todos prendidos si no hay config).
+      type: object
+      additionalProperties: false
+      required: [type, casos]
+      properties:
+        type:
+          const: configVoz
+        casos:
+          type: object
+          additionalProperties: false
+          required: [pregunta, permiso, fin_pregunta, esperando]
+          properties:
+            pregunta:
+              type: boolean
+            permiso:
+              type: boolean
+            fin_pregunta:
+              type: boolean
+            esperando:
+              type: boolean
 
     OficinasEstado:
       description: Qué proyecto ocupa cada oficina asignable (null = libre) y qué proyectos de Orca se pueden asignar.

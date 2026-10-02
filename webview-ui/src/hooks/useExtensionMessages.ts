@@ -20,6 +20,7 @@ import {
 import type { OfficeLayout, ToolActivity } from '../office/types.js';
 import { setWallSprites } from '../office/wallTiles.js';
 import { alLanzarSub, alTerminarSub } from '../personal/burbujas.js';
+import { setConfigVoz } from '../personal/configVoz.js';
 import { alMensaje, registrarSub } from '../personal/personal.js';
 import { setOficinas } from '../personal/pizarra.js';
 import { setSkins } from '../personal/skins.js';
@@ -643,6 +644,8 @@ export function useExtensionMessages(
         );
       } else if (msg.type === 'skinsPersonalesLoaded') {
         setSkins(msg.skins); // personal: skins de Marvel (solo estética)
+      } else if (msg.type === 'configVoz') {
+        setConfigVoz(msg.casos); // personal: qué casos avisan por voz (sala de comunicaciones)
       } else if (msg.type === 'oficinasEstado') {
         setOficinas(msg.lugares, msg.disponibles, msg.candidatos); // personal: qué proyecto ocupa cada oficina (menú de la oficina)
       } else if (msg.type === 'floorTilesLoaded') {

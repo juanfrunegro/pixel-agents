@@ -26,6 +26,7 @@ import {
   recordarCarpeta,
 } from './personal/oficina.js';
 import { cambiarVozSesion, guardarNombre, mensajeNombres } from './personal/personal.js';
+import { escribirConfigVoz, leerConfigVoz } from './personal/senales.js';
 import { mensajeSkins } from './personal/skins.js';
 import type { ConsentEffects } from './providers/hook/consentExecutor.js';
 import { applyConsentChoice } from './providers/hook/consentExecutor.js';
@@ -380,6 +381,21 @@ export function handleClientMessage(
       // Interruptor del aviso por voz (sala de comunicaciones o ficha). Solo con token; el servidor valida la sesión.
       if (!ctx.privileged) break;
       cambiarVozSesion(store, msg.id, msg.valor);
+      break;
+    }
+
+    case 'pedirConfigVoz': {
+      // Al abrir la sala de comunicaciones: qué casos avisan por voz (lo leen los hooks de voz).
+      if (!ctx.privileged) break;
+      send({ type: 'configVoz', casos: leerConfigVoz() });
+      break;
+    }
+
+    case 'setConfigVoz': {
+      // Prender o apagar un caso ("Avisar por voz cuando:"). Solo con token; el servidor valida caso y valor.
+      if (!ctx.privileged) break;
+      escribirConfigVoz(msg.caso, msg.valor);
+      send({ type: 'configVoz', casos: leerConfigVoz() });
       break;
     }
 

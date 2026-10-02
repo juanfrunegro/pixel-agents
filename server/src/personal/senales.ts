@@ -186,6 +186,50 @@ export function escribirOverrideVoz(
   return true;
 }
 
+/**
+ * Qué casos avisan por voz (sala de comunicaciones, fila "Avisar por voz cuando:"): ~/.pixel-agents/voz/config.json.
+ * Lo leen los hooks de voz (~/.claude/hooks/voz_comun.py): pregunta = AskUserQuestion, permiso = pedido de permiso,
+ * fin_pregunta = la respuesta termina con una pregunta, esperando = Claude lleva un rato esperando. Sin archivo o sin
+ * clave = prendido. Solo valen para sesiones con la voz activada.
+ */
+export const CASOS_VOZ = ['pregunta', 'permiso', 'fin_pregunta', 'esperando'] as const;
+export type CasoVoz = (typeof CASOS_VOZ)[number];
+export type ConfigVoz = Record<CasoVoz, boolean>;
+
+function esCasoVoz(c: unknown): c is CasoVoz {
+  return typeof c === 'string' && (CASOS_VOZ as readonly string[]).includes(c);
+}
+
+export function leerConfigVoz(carpeta = carpetaOverrideVoz()): ConfigVoz {
+  let crudo: Record<string, unknown> = {};
+  try {
+    const v: unknown = JSON.parse(fs.readFileSync(path.join(carpeta, 'config.json'), 'utf8'));
+    if (v && typeof v === 'object' && !Array.isArray(v)) crudo = v as Record<string, unknown>;
+  } catch {
+    /* sin archivo o ilegible: todo prendido */
+  }
+  const cfg = {} as ConfigVoz;
+  for (const c of CASOS_VOZ) cfg[c] = crudo[c] !== false;
+  return cfg;
+}
+
+/** Prende o apaga un caso (escritura atómica, conserva lo demás). false si el caso o el valor no son válidos. */
+export function escribirConfigVoz(
+  caso: unknown,
+  valor: unknown,
+  carpeta = carpetaOverrideVoz(),
+): boolean {
+  if (!esCasoVoz(caso) || typeof valor !== 'boolean') return false;
+  const cfg = leerConfigVoz(carpeta);
+  cfg[caso] = valor;
+  fs.mkdirSync(carpeta, { recursive: true });
+  const archivo = path.join(carpeta, 'config.json');
+  const tmp = `${archivo}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(cfg, null, 2), 'utf8');
+  fs.renameSync(tmp, archivo);
+  return true;
+}
+
 /** Cuándo dijo un hook el último aviso de esa sesión (mtime de <sesión>.dicho, ms), o null. */
 export function vozDicha(sesion: string, carpeta = carpetaOverrideVoz()): number | null {
   if (!sesionValida(sesion)) return null;

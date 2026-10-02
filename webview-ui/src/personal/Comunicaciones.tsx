@@ -5,7 +5,11 @@
  * Prendido = al terminar el turno te avisa por voz. Arranca como lo pidió el prompt ("avisame cuando termines" → marca
  * del hook); si lo tocás, manda tu elección sobre el prompt (el servidor escribe ~/.pixel-agents/voz/<sesión>.override
  * y los hooks de voz de Windows y WSL lo leen). "Seguir al prompt" borra tu elección.
+ * Arriba, "Avisar por voz cuando:" prende o apaga cada caso para todas las sesiones con voz (pregunta, permiso, termina
+ * con pregunta, te espera; ~/.pixel-agents/voz/config.json).
  */
+import { useEffect } from 'react';
+
 import type { OfficeState } from '../office/engine/officeState.js';
 import { isBrowserRuntime } from '../runtime.js';
 import { transport } from '../transport/index.js';
@@ -17,6 +21,7 @@ import {
   COLOR_WINDOWS,
   COLOR_WSL,
 } from './colores.js';
+import { CASOS_VOZ, type CasoVoz, useConfigVoz } from './configVoz.js';
 import { esWsl, nombreDe, usePersonal, vozDe, vozOverrideDe, vozPedidaDe } from './personal.js';
 import { cerrarComunicaciones, usePizarra } from './pizarra.js';
 import { origenVoz, sesionesParaPanel, siguienteVoz } from './voz.js';
@@ -74,9 +79,60 @@ export function InterruptorVoz({ id, compacto = false }: { id: number; compacto?
   );
 }
 
+/** Fila "Avisar por voz cuando:": qué casos avisan a las sesiones con la voz activada (los 4 prendidos por defecto). */
+function CasosVoz() {
+  const cfg = useConfigVoz();
+  const cambiar = (caso: CasoVoz, valor: boolean) =>
+    transport.send({ type: 'setConfigVoz', caso, valor });
+  return (
+    <div className="flex flex-col gap-2" data-testid="casos-voz">
+      <span style={{ fontSize: '18px', fontWeight: 'bold' }}>Avisar por voz cuando:</span>
+      <div className="flex flex-wrap items-center" style={{ gap: '8px 18px' }}>
+        {CASOS_VOZ.map(({ caso, texto }) => {
+          const prendido = cfg ? cfg[caso] : true;
+          return (
+            <label key={caso} className="flex items-center gap-4" style={{ fontSize: '17px' }}>
+              <button
+                role="switch"
+                aria-checked={prendido}
+                aria-label={`Avisar por voz: ${texto}`}
+                data-testid={`caso-voz-${caso}`}
+                disabled={!cfg}
+                onClick={() => cambiar(caso, !prendido)}
+                style={{
+                  width: 36,
+                  height: 18,
+                  borderRadius: 0,
+                  padding: 2,
+                  cursor: cfg ? 'pointer' : 'default',
+                  opacity: cfg ? 1 : 0.5,
+                  background: prendido ? COLOR_VOZ_ON : COLOR_VOZ_OFF,
+                  display: 'flex',
+                  justifyContent: prendido ? 'flex-end' : 'flex-start',
+                }}
+              >
+                <span
+                  style={{ width: 14, height: 14, background: COLOR_PERILLA, display: 'block' }}
+                />
+              </button>
+              {texto}
+            </label>
+          );
+        })}
+      </div>
+      <span style={{ fontSize: '14px', opacity: 0.65 }}>
+        Solo para las sesiones con la voz prendida. Si no respondés en 5 min, lo repite una vez.
+      </span>
+    </div>
+  );
+}
+
 export function PanelComunicaciones({ officeState }: { officeState: OfficeState }) {
   const p = usePizarra();
   usePersonal();
+  useEffect(() => {
+    if (p.comunicaciones) transport.send({ type: 'pedirConfigVoz' });
+  }, [p.comunicaciones]);
   if (!isBrowserRuntime || !p.comunicaciones) return null;
   const sesiones = sesionesParaPanel(officeState.characters.values());
   return (
@@ -117,6 +173,7 @@ export function PanelComunicaciones({ officeState }: { officeState: OfficeState 
             cerrar
           </button>
         </div>
+        <CasosVoz />
         <span style={{ fontSize: '16px', opacity: 0.75 }}>
           Quién te avisa por voz cuando termina. Si en el prompt pediste &quot;avisame cuando
           termines&quot; aparece prendido; lo que elijas acá manda sobre el prompt.
