@@ -60,6 +60,11 @@ describe('personal: organigrama', () => {
     expect(pos('<h2>Finanzas</h2>')).toBeGreaterThan(pos('<h2>Ingeniería</h2>'));
     expect(pos('<h2>Otros puestos</h2>')).toBeGreaterThan(pos('<h2>Finanzas</h2>'));
     expect(pos('<b>Zoe</b>')).toBeGreaterThan(pos('<h2>Otros puestos</h2>'));
+    // El agente del ERP corre en WSL: lleva la etiqueta; el global no.
+    const cobros = html.slice(pos('<b>cobros</b>'), pos('<b>cobros</b>') + 400);
+    expect(cobros).toContain('class="chip wsl"');
+    const bugs = html.slice(pos('<b>bugs</b>'), pos('<b>bugs</b>') + 400);
+    expect(bugs).not.toContain('class="chip wsl"');
     // Puesto del agente = lo que va después de "·"; su avatar es el de la persona (Pepe = 2.º → char_1).
     expect(html).toContain('<b>bugs</b>');
     expect(html).toMatch(/char_1\.png[^>]*><\/span><div>\s*<b>bugs<\/b>/);

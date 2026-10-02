@@ -2,9 +2,14 @@
  * Personal (copia de juanfrunegro): lo que se dibuja encima de los personajes además de las burbujas del original.
  * - "Zzz" cuando la sesión se quedó sin tokens (dormidoDe).
  * - Burbujas de diálogo cuando un agente lanza un sub-agente y cuando el sub-agente le devuelve el resultado.
+ * - Etiqueta "WSL" al costado de los agentes que corren en WSL (otra cuenta), para distinguirlos de un vistazo.
  * El original solo llama a renderBurbujasPersonales() después de sus propias burbujas.
  */
-import { BUBBLE_SITTING_OFFSET_PX, BUBBLE_VERTICAL_OFFSET_PX } from '../constants.js';
+import {
+  BUBBLE_SITTING_OFFSET_PX,
+  BUBBLE_VERTICAL_OFFSET_PX,
+  CHARACTER_SITTING_OFFSET_PX,
+} from '../constants.js';
 import { getCachedSprite } from '../office/sprites/spriteCache.js';
 import type { Character, SpriteData } from '../office/types.js';
 import { CharacterState } from '../office/types.js';
@@ -12,15 +17,19 @@ import {
   COLOR_BURBUJA_BORDE,
   COLOR_BURBUJA_FONDO,
   COLOR_BURBUJA_TEXTO,
+  COLOR_ETIQUETA_TEXTO,
+  COLOR_WSL,
   COLOR_ZZZ,
 } from './colores.js';
-import { dormidoDe } from './personal.js';
+import { dormidoDe, esWsl } from './personal.js';
 
 const _ = '';
 const Z = COLOR_ZZZ;
 const B = COLOR_BURBUJA_BORDE;
 const F = COLOR_BURBUJA_FONDO;
 const L = COLOR_BURBUJA_TEXTO;
+const V = COLOR_WSL;
+const T = COLOR_ETIQUETA_TEXTO;
 
 function sprite(filas: string[], colores: Record<string, string>): SpriteData {
   return filas.map((f) => [...f].map((c) => (c === '.' ? _ : colores[c])));
@@ -47,6 +56,20 @@ export const BURBUJA_HABLA: SpriteData = sprite(
     '...........',
   ],
   { B, F, L },
+);
+
+/** Etiqueta "WSL" (15x7): fondo verde agua y letras blancas. */
+export const ETIQUETA_WSL: SpriteData = sprite(
+  [
+    'VVVVVVVVVVVVVVV',
+    'VTVVVTVTTTVTVVV',
+    'VTVVVTVTVVVTVVV',
+    'VTVTVTVTTTVTVVV',
+    'VTTVTTVVVTVTVVV',
+    'VTVVVTVTTTVTTTV',
+    'VVVVVVVVVVVVVVV',
+  ],
+  { V, T },
 );
 
 // ── Conversaciones ──────────────────────────────────────────────
@@ -110,6 +133,17 @@ export function renderBurbujasPersonales(
     const sentado = ch.state === CharacterState.TYPE;
     const sittingOff = sentado ? BUBBLE_SITTING_OFFSET_PX : 0;
     const cabezaY = ch.y + sittingOff - BUBBLE_VERTICAL_OFFSET_PX;
+
+    if (esWsl(ch.id) && ch.matrixEffect === null) {
+      // Al costado izquierdo, a la altura del hombro: no pisa las burbujas, que van centradas arriba.
+      const tag = getCachedSprite(ETIQUETA_WSL, zoom);
+      const sentadoOff = sentado ? CHARACTER_SITTING_OFFSET_PX : 0;
+      ctx.drawImage(
+        tag,
+        Math.round(offsetX + (ch.x - 20) * zoom),
+        Math.round(offsetY + (ch.y + sentadoOff - 22) * zoom),
+      );
+    }
 
     if (dormidoDe(ch.id, ahora)) {
       // Tres "z" que suben en diagonal desde la cabeza, desfasadas, y se desvanecen.

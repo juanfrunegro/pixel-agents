@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react';
 import type { SubagentCharacter } from '../hooks/useExtensionMessages.js';
 import type { OfficeState } from '../office/engine/officeState.js';
 import { transport } from '../transport/index.js';
+import { COLOR_WINDOWS, COLOR_WSL } from './colores.js';
 import {
   claveDe,
   colorModelo,
@@ -14,6 +15,7 @@ import {
   despiertaA,
   dormidoDe,
   esDescartable,
+  esWsl,
   etiquetaModelo,
   inicioDe,
   metaDe,
@@ -148,6 +150,11 @@ export function FichaAgente({ officeState, subagentCharacters }: Props) {
       </div>
       <Fila etiqueta="Interno">{interno}</Fila>
       <Fila etiqueta="Proyecto">{proyecto}</Fila>
+      <Fila etiqueta="Dónde corre">
+        <span style={{ color: esWsl(id) ? COLOR_WSL : COLOR_WINDOWS, fontWeight: 'bold' }}>
+          {esWsl(id) ? 'WSL · cuenta Max' : 'Windows · cuenta Pro'}
+        </span>
+      </Fila>
       <Fila etiqueta="Modelo">
         {etiquetaModelo(modelo)}
         {meta?.m === 'hereda' ? ' (del que lo lanzó)' : ''}

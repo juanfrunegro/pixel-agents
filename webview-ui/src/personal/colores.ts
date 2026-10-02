@@ -10,3 +10,8 @@ export const COLOR_ZZZ = '#9FB7FF';
 export const COLOR_BURBUJA_BORDE = '#555566';
 export const COLOR_BURBUJA_FONDO = '#EEEEFF';
 export const COLOR_BURBUJA_TEXTO = '#8888AA';
+/** Personal: sesiones de WSL (cuenta Max) contra las de Windows (cuenta Pro). */
+export const COLOR_WSL = '#14b8a6';
+export const COLOR_WINDOWS = '#3b82f6';
+export const COLOR_ETIQUETA_TEXTO = '#ffffff';
+export const COLOR_DIVISOR = '#0d0f14';

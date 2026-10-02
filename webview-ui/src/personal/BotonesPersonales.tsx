@@ -1,5 +1,5 @@
 /**
- * Personal (copia de juanfrunegro): botones "Recargar", "Organigrama" y "Apagar" de la barra de abajo (solo en el
+ * Personal (copia de juanfrunegro): botones "Recargar", "Dividir", "Organigrama" y "Apagar" de la barra de abajo (solo en el
  * navegador). Recargar vuelve a armar las salas con los proyectos de Orca sin reiniciar el servidor y recarga la
  * página. Apagar pide confirmación con un segundo clic y apaga el servidor; se vuelve a abrir solo con el próximo
  * agente.
@@ -9,11 +9,13 @@ import { useEffect, useState } from 'react';
 import { Button } from '../components/ui/Button.js';
 import { isBrowserRuntime } from '../runtime.js';
 import { transport } from '../transport/index.js';
+import { setPantallaDividida, usePantallaDividida } from './division.js';
 
 export function BotonesPersonales() {
   const [confirmar, setConfirmar] = useState(false);
   const [apagado, setApagado] = useState(false);
   const [recarga, setRecarga] = useState<'no' | 'pidiendo' | 'error'>('no');
+  const dividida = usePantallaDividida();
   useEffect(
     () =>
       transport.onMessage((msg) => {
@@ -48,6 +50,13 @@ export function BotonesPersonales() {
         title="Vuelve a armar las salas con tus proyectos de Orca, sin apagar Pixel"
       >
         {recarga === 'pidiendo' ? 'Recargando…' : recarga === 'error' ? 'No se pudo' : 'Recargar'}
+      </Button>
+      <Button
+        variant={dividida ? 'active' : 'default'}
+        onClick={() => setPantallaDividida(!dividida)}
+        title="Windows a la izquierda y WSL a la derecha, al mismo tiempo"
+      >
+        {dividida ? 'Vista única' : 'Dividir: Windows | WSL'}
       </Button>
       <Button
         onClick={() =>

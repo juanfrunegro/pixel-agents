@@ -10,7 +10,7 @@ import * as path from 'path';
 import { aspectoDePersona, personaDe } from '../../../core/src/aspectoPersonal.js';
 import { PALETTE_COUNT } from '../constants.js';
 import type { Definicion, Nombres } from './personal.js';
-import { definiciones, leerNombres, ordenPersonas } from './personal.js';
+import { definiciones, esDeWsl, leerNombres, ordenPersonas } from './personal.js';
 
 interface Uso {
   veces: number;
@@ -64,6 +64,10 @@ function color(m?: string): string {
   if (x.includes('haiku')) return '#4cb36a';
   return '#9aa0ab';
 }
+
+/** Proyectos que corren en WSL (otra cuenta, Max): sus agentes llevan la etiqueta "WSL". */
+const PROYECTOS_WSL = new Set(['ERP']);
+const COLOR_WSL = '#14b8a6';
 
 /** Áreas de la empresa por defecto (se pisan con "areas" en nombres.json: { "Área": ["Persona", …] }). */
 const AREAS: Record<string, string[]> = {
@@ -137,7 +141,7 @@ export function htmlOrganigrama(
       ? `${u.veces} ${u.veces === 1 ? 'vez' : 'veces'} · US$ ${(u.costo / u.veces).toFixed(2)} promedio · notas ${u.bien} bien / ${u.mal} mal · última ${esc(u.ultima)}`
       : 'sin uso registrado todavía';
     return `<li class="ag" style="border-left-color:${color(d.modelo)}">${avatar(persona, orden)}<div>
-      <b>${esc(puesto)}</b> <span class="chip" style="background:${color(d.modelo)}">${esc(d.modelo ?? 'hereda')}${d.esfuerzo ? ' · ' + esc(d.esfuerzo) : ''}</span>
+      <b>${esc(puesto)}</b> <span class="chip" style="background:${color(d.modelo)}">${esc(d.modelo ?? 'hereda')}${d.esfuerzo ? ' · ' + esc(d.esfuerzo) : ''}</span>${PROYECTOS_WSL.has(d.proyecto) || esDeWsl(d.archivo) ? ' <span class="chip wsl">WSL</span>' : ''}
       <span class="int">${esc(interno)} · ${esc(d.proyecto)}</span>
       <p>${esc((d.descripcion ?? '').slice(0, 200))}</p><span class="uso">${rinde}</span></div></li>`;
   };
@@ -183,10 +187,10 @@ ul{list-style:none;margin:0 0 0 22px;padding:0 0 0 12px;border-left:2px solid #3
 .ag{display:flex;gap:8px;align-items:flex-start;border-left:4px solid #555;padding:14px 10px 6px 6px;background:#262a35;border-radius:3px}
 .ag div{display:grid;gap:2px;min-width:0}.ag.ext{border-left-style:dashed}
 .ag p{margin:0;font-size:13px;color:#c9cdd6}.int{font:12px ui-monospace,monospace;color:#9ba2b0;overflow-wrap:anywhere}.uso{font-size:12px;color:#9ba2b0}
-.chip{font-size:11px;font-weight:700;color:#111;padding:0 6px;border-radius:3px;white-space:nowrap}.vac{margin:0 0 0 34px;color:#9ba2b0;font-size:13px}
+.chip{font-size:11px;font-weight:700;color:#111;padding:0 6px;border-radius:3px;white-space:nowrap}.chip.wsl{background:${COLOR_WSL};color:#fff}.vac{margin:0 0 0 34px;color:#9ba2b0;font-size:13px}
 </style></head><body><h1>Organigrama de agentes</h1>
 <p class="sub">Armado en vivo con nombres.json, la definición de cada agente y el registro de rendimiento. Cada persona tiene su personaje, el mismo que usa en la oficina. Para cambiar un nombre: ficha del agente en la oficina o ~/.claude/agents/nombres.json (ahí también se cambian las áreas, con la clave "areas").</p>
-<div class="ley"><span><i style="background:#e8832a"></i>Opus</span><span><i style="background:#3b9bd6"></i>Sonnet</span><span><i style="background:#a463e0"></i>Fable</span><span><i style="background:#4cb36a"></i>Haiku</span><span><i style="background:#9aa0ab"></i>hereda del que lo lanza</span></div>
+<div class="ley"><span><i style="background:#e8832a"></i>Opus</span><span><i style="background:#3b9bd6"></i>Sonnet</span><span><i style="background:#a463e0"></i>Fable</span><span><i style="background:#4cb36a"></i>Haiku</span><span><i style="background:#9aa0ab"></i>hereda del que lo lanza</span><span><i style="background:${COLOR_WSL}"></i>WSL: corre en WSL con la cuenta Max (el resto, en Windows con la Pro)</span></div>
 <div class="ceo"><div class="tarjeta">${avatar(ceo, orden, true)}<div><b>${esc(n.ceo)}</b><span class="rol">${esc(roles[ceo] ?? 'CEO')}</span><br><span class="int">sesión principal · en la oficina cada sesión tiene su propio personaje</span></div></div></div>
 <main>${bloques}${sin}</main></body></html>`;
 }
