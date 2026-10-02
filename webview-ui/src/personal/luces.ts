@@ -3,6 +3,7 @@
  * - Deploy: la oficina del proyecto que está deployando parpadea suave en ámbar mientras dure el comando.
  * - Presentaciones: se prende tenue cuando una sesión pidió el aviso por voz ("preparando") y fuerte, con las
  *   pantallas encendidas, mientras alguien presenta (se acaba de decir su aviso).
+ * - Presentaciones sin nadie con voz: luz apagada (bien oscura), así se nota cuándo alguna sesión la prende.
  * - Hora del día (tanda 3): de día normal; al atardecer un tono cálido; de noche (20 a 7 h, hora de esta PC) la oficina
  *   se oscurece y solo quedan iluminadas las salas donde alguien trabaja (y las que tienen su luz: deploy,
  *   Presentaciones). Suave, para la segunda pantalla. Con el editor de Layout abierto no se oscurece nada.
@@ -108,6 +109,25 @@ export function renderLuces(
 
 /** Oscuridad de la noche en las salas apagadas (opacidad del velo). */
 export const NOCHE = 0.55;
+
+/**
+ * Presentaciones con la luz apagada: ninguna sesión tiene el aviso por voz (ni pedido en el prompt ni prendido en la
+ * sala de comunicaciones). Bien oscura, para que se note al toque cuando alguna lo prende.
+ */
+export const PRESENTACIONES_APAGADA = 0.62;
+
+/**
+ * Velo extra sobre Presentaciones: 0 si tiene su luz (voz o alguien presentando); si no, lo que falte para llegar a
+ * PRESENTACIONES_APAGADA sumando el velo de la noche (que ya la cubre si nadie trabaja ahí).
+ */
+export function veloPresentaciones(
+  tieneLuz: boolean,
+  oscuridad: number,
+  hayGenteTrabajando: boolean,
+): number {
+  if (tieneLuz) return 0;
+  return Math.max(0, PRESENTACIONES_APAGADA - (hayGenteTrabajando ? 0 : oscuridad));
+}
 const CALIDO_ATARDECER = 0.12;
 const CALIDO_NOCHE = 0.03;
 
@@ -205,9 +225,22 @@ export function renderNoche(
   hora = horaLocal(),
 ): void {
   const { oscuridad, calidez } = luzDelDia(hora);
-  if (oscuridad <= 0 && calidez <= 0) return;
+  const velo = veloPresentaciones(
+    actuales.has(SALA_PRESENTACIONES),
+    oscuridad,
+    prendidas.has(SALA_PRESENTACIONES),
+  );
+  if (oscuridad <= 0 && calidez <= 0 && velo <= 0) return;
   const s = TILE_SIZE * zoom;
   ctx.save();
+  if (velo > 0 && areaTiles) {
+    ctx.globalAlpha = velo;
+    ctx.fillStyle = COLOR_NOCHE;
+    for (let i = 0; i < areaTiles.length; i++) {
+      if (areaTiles[i] !== SALA_PRESENTACIONES) continue;
+      ctx.fillRect(offsetX + (i % cols) * s, offsetY + Math.floor(i / cols) * s, s, s);
+    }
+  }
   if (oscuridad > 0) {
     const luz = new Set([...prendidas, ...actuales.keys()]);
     ctx.globalAlpha = oscuridad;
