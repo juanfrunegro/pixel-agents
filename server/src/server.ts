@@ -18,6 +18,7 @@ import {
   SERVERS_DIR,
 } from './constants.js';
 import { createHttpServer } from './httpServer.js';
+import { tokenEstable } from './personal/tokenEstable.js';
 import type { ServerConfig } from './serverConfig.js';
 import { isServerConfig, isServerTarget } from './serverConfig.js';
 
@@ -90,8 +91,10 @@ export class PixelAgentsServer {
       return candidate;
     }
 
-    // Start our own server
-    const token = crypto.randomUUID();
+    // Start our own server. Personal: el standalone reutiliza su token entre reinicios (personal/tokenEstable.ts).
+    const token = wantsSpa
+      ? tokenEstable(path.dirname(this.getServerJsonPath()))
+      : crypto.randomUUID();
     const store = options?.store;
 
     const { app, port } = await createHttpServer({

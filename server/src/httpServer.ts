@@ -108,11 +108,15 @@ export async function createHttpServer(options: HttpServerOptions): Promise<Http
 
 // ── Health ──────────────────────────────────────────────────────
 
+/** Personal: pestañas conectadas por WebSocket. El hook pixel_agents.py no apaga la oficina mientras haya alguna. */
+let clientesConectados = 0;
+
 function registerHealthRoute(app: FastifyInstance): void {
   app.get('/api/health', async () => ({
     status: 'ok',
     uptime: Math.floor((Date.now() - startTime) / 1000),
     pid: process.pid,
+    clientes: clientesConectados,
   }));
 }
 
@@ -226,7 +230,9 @@ function registerWebSocketRoute(app: FastifyInstance, options: HttpServerOptions
       }
     });
 
+    clientesConectados++;
     socket.on('close', () => {
+      clientesConectados = Math.max(0, clientesConectados - 1);
       store.off('agentAdded', onAgentAdded);
       store.off('agentRemoved', onAgentRemoved);
       store.off('broadcast', onBroadcast);

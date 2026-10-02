@@ -92,6 +92,10 @@ const KEY_SHOW_AREAS = 'pixel-agents.showAreas';
  * layout, settings, agents. Assets are loaded once at startup and cached
  * in memory. Each connecting client receives the full state on webviewReady.
  */
+/** Personal: respuesta a una pestaña sin token (abierta con un token viejo o sin él). */
+export const SIN_PERMISO =
+  'Esta pestaña no tiene permiso: abrí la oficina de nuevo desde el favorito de Pixel.';
+
 export function handleClientMessage(
   msg: Record<string, unknown>,
   send: WsSend,
@@ -301,7 +305,11 @@ export function handleClientMessage(
     }
     case 'recargarOficina': {
       // Botón "Recargar": salas según los proyectos de Orca, sin reiniciar. Los clientes recargan la página.
-      if (!ctx.privileged) break;
+      // Sin token (pestaña vieja) se contesta con error: antes se ignoraba y el botón quedaba en "Recargando…".
+      if (!ctx.privileged) {
+        send({ type: 'oficinaRecargada', error: SIN_PERMISO });
+        break;
+      }
       try {
         if (!cache?.defaultLayout) throw new Error('falta el plano original');
         const r = recargarOficina(cache.defaultLayout);
@@ -319,7 +327,10 @@ export function handleClientMessage(
     case 'asignarOficina': {
       // Menú de una oficina: "Asignar proyecto" o "Dejar vacía". Solo proyectos de Orca y oficinas que existen; se
       // regenera el plano con las oficinas en su lugar y los clientes recargan la página (sin reiniciar el server).
-      if (!ctx.privileged) break;
+      if (!ctx.privileged) {
+        send({ type: 'oficinaAsignada', error: SIN_PERMISO });
+        break;
+      }
       try {
         if (!cache?.defaultLayout) throw new Error('falta el plano original');
         // Lista fresca: un proyecto recién agregado a Orca o una carpeta nueva de IA Tools se pueden asignar ya.
@@ -374,8 +385,7 @@ export function handleClientMessage(
 
     case 'abrirProyecto': {
       // Clic en una oficina: abrir su carpeta o VS Code. La ruta sale de Orca, nunca del cliente.
-      if (!ctx.privileged) break;
-      const error = abrirProyecto(msg.sala, msg.accion);
+      const error = ctx.privileged ? abrirProyecto(msg.sala, msg.accion) : SIN_PERMISO;
       send({
         type: 'proyectoAbierto',
         sala: msg.sala,

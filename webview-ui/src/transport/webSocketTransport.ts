@@ -135,9 +135,21 @@ export class WebSocketTransport implements MessageTransport {
     this.stateHandlers = [];
   }
 
+  /**
+   * Personal: reintentar ya, sin esperar el backoff (botón "Prender" de la oficina apagada). No hace nada si ya está
+   * conectada o conectándose.
+   */
+  retryNow(): void {
+    if (this.disposed || !this.reconnectTimer) return;
+    clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = null;
+    this.connect();
+  }
+
   private scheduleReconnect(): void {
-    // Exponential backoff: 1s, 2s, 4s, 8s, max 30s
-    const delay = Math.min(1000 * 2 ** this.reconnectAttempts, 30000);
+    // Exponential backoff: 1s, 2s, 4s, 8s, max 10s (personal: el original llegaba a 30 s; con la oficina en la
+    // segunda pantalla, volver rápido cuando el server se prende importa más que unos pocos intentos de más).
+    const delay = Math.min(1000 * 2 ** this.reconnectAttempts, 10000);
     this.reconnectAttempts++;
     console.log(
       `[Transport] WebSocket reconnecting in ${delay}ms (attempt ${this.reconnectAttempts})`,

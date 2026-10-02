@@ -12,6 +12,10 @@ import { transport } from '../transport/index.js';
 import { COLOR_AVISO, COLOR_WINDOWS, COLOR_WSL } from './colores.js';
 import { setFiltroSistema, type Sistema, useFiltroSistema } from './filtro.js';
 import { type Cuenta, cupoPorCuenta, textoCupo, usePersonal } from './personal.js';
+import { pedirConPlazo, type Resultado, resultadoDeError, textoFalla } from './recarga.js';
+
+/** Plazo para que el server conteste Recargar (arma el plano y lo manda; tarda menos de 2 s). */
+const PLAZO_RECARGA_MS = 20_000;
 
 const CUENTAS: Array<{ id: Cuenta; texto: string; color: string }> = [
   { id: 'windows', texto: 'Windows', color: COLOR_WINDOWS },
@@ -56,22 +60,36 @@ const SISTEMAS: Array<{ id: Sistema; texto: string; title: string }> = [
 export function BotonesPersonales() {
   const [confirmar, setConfirmar] = useState(false);
   const [apagado, setApagado] = useState(false);
-  const [recarga, setRecarga] = useState<'no' | 'pidiendo' | 'error'>('no');
+  const [recarga, setRecarga] = useState<'no' | 'pidiendo' | Exclude<Resultado, { ok: true }>>(
+    'no',
+  );
   const filtro = useFiltroSistema();
+  // Recargar de cualquier pestaña (o asignar una oficina) avisa a todas: el plano cambió, la página lo pide de nuevo.
   useEffect(
     () =>
       transport.onMessage((msg) => {
-        if (msg.type !== 'oficinaRecargada') return;
-        if (msg.error) {
-          console.error('[Pixel Agents] Recargar:', msg.error);
-          setRecarga('error');
-          setTimeout(() => setRecarga('no'), 4000);
-        } else {
-          window.location.reload(); // plano y salas nuevos: la página los pide de nuevo al conectar
-        }
+        if (msg.type === 'oficinaRecargada' && !msg.error) window.location.reload();
       }),
     [],
   );
+  const recargar = () => {
+    setRecarga('pidiendo');
+    pedirConPlazo({
+      conectada: transport.state === 'connected',
+      enviar: () => transport.send({ type: 'recargarOficina' }),
+      escuchar: (cb) =>
+        transport.onMessage((msg) => {
+          if (msg.type === 'oficinaRecargada') cb(resultadoDeError(msg.error));
+        }),
+      plazoMs: PLAZO_RECARGA_MS,
+      alTerminar: (r) => {
+        if (r.ok) return; // la página se recarga sola (arriba)
+        console.error('[Pixel Agents] Recargar:', r.motivo, r.detalle ?? '');
+        setRecarga(r);
+        setTimeout(() => setRecarga('no'), 6000);
+      },
+    });
+  };
   if (!isBrowserRuntime) return null;
   const token = new URLSearchParams(window.location.search).get('token') ?? '';
 
@@ -85,13 +103,20 @@ export function BotonesPersonales() {
   return (
     <>
       <Button
-        onClick={() => {
-          setRecarga('pidiendo');
-          transport.send({ type: 'recargarOficina' });
-        }}
-        title="Vuelve a armar las salas con tus proyectos de Orca, sin apagar Pixel"
+        onClick={recargar}
+        disabled={recarga === 'pidiendo'}
+        variant={recarga === 'pidiendo' ? 'disabled' : 'default'}
+        title={
+          typeof recarga === 'object' && recarga.detalle
+            ? recarga.detalle
+            : 'Vuelve a armar las salas con tus proyectos de Orca, sin apagar Pixel'
+        }
       >
-        {recarga === 'pidiendo' ? 'Recargando…' : recarga === 'error' ? 'No se pudo' : 'Recargar'}
+        {recarga === 'pidiendo'
+          ? 'Recargando…'
+          : typeof recarga === 'object'
+            ? textoFalla(recarga)
+            : 'Recargar'}
       </Button>
       {SISTEMAS.map((s) => (
         <Button
