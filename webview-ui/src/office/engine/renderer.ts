@@ -46,8 +46,9 @@ import {
 } from '../../constants.js';
 import { renderBurbujasPersonales } from '../../personal/burbujas.js';
 import { ALFA_APAGADO, apagadoPorFiltro } from '../../personal/filtro.js';
-import { renderLuces } from '../../personal/luces.js';
+import { renderLuces, renderNoche } from '../../personal/luces.js';
 import { colorModelo, modeloDe } from '../../personal/personal.js';
+import { renderPizarra } from '../../personal/pizarra.js';
 import { getColorizedFloorSprite, hasFloorSprites, WALL_COLOR } from '../floorTiles.js';
 import { mapOffset } from '../projection.js';
 import {
@@ -974,6 +975,8 @@ export function renderFrame(
     pets ?? [],
   );
 
+  renderPizarra(ctx, areas, offsetX, offsetY, zoom); // personal: pendientes en la pizarra del Brain
+  if (!editor) renderNoche(ctx, areaTiles, cols, rows, offsetX, offsetY, zoom); // personal: luz según la hora
   renderLuces(ctx, areaTiles, cols, offsetX, offsetY, zoom); // personal: deploy y Presentaciones
 
   // Speech bubbles (always on top of characters)

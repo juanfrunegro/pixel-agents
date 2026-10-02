@@ -137,6 +137,10 @@ export function alMensaje(msg: any): void {
       presento: typeof msg.presento === 'number' ? msg.presento : null,
     });
     avisar();
+  } else if (msg?.type === 'agentClosed' && typeof msg.id === 'number') {
+    // Una sesión cerrada ya no cuenta (por ejemplo, para el cupo de su cuenta).
+    estado.info.delete(msg.id);
+    avisar();
   } else if (msg?.type === 'agentCreated' || msg?.type === 'existingAgents') {
     const ids: number[] = msg.type === 'agentCreated' ? [msg.id] : (msg.agents ?? []);
     for (const id of ids) if (!estado.inicio.has(id)) estado.inicio.set(id, Date.now());
@@ -220,6 +224,39 @@ export function dormidoDe(charId: number, ahora = Date.now()): boolean {
   const hasta = estado.info.get(s ? s.padre : charId)?.dormidoHasta;
   if (hasta === null || hasta === undefined) return false;
   return hasta === 0 || ahora < hasta * 1000;
+}
+
+export type Cuenta = 'windows' | 'wsl';
+
+/**
+ * Cupo de cada cuenta (Windows = Pro, WSL = Max). Claude Code no dice cuánto queda: solo avisa cuando ya se acabó
+ * (rate_limit con la hora de vuelta). Así que solo hay dos estados: OK, o sin cupo (alguna sesión de esa cuenta está
+ * dormida) hasta la hora de vuelta más tardía que se conozca (null = no se sabe).
+ */
+export function cupoPorCuenta(
+  ahora = Date.now(),
+): Record<Cuenta, { sinCupo: boolean; hasta: number | null }> {
+  const r: Record<Cuenta, { sinCupo: boolean; hasta: number | null }> = {
+    windows: { sinCupo: false, hasta: null },
+    wsl: { sinCupo: false, hasta: null },
+  };
+  for (const [id, info] of estado.info) {
+    if (estado.subs.has(id)) continue;
+    const h = info.dormidoHasta;
+    if (h === null || h === undefined || (h !== 0 && ahora >= h * 1000)) continue;
+    const c = r[info.wsl ? 'wsl' : 'windows'];
+    c.sinCupo = true;
+    if (h !== 0) c.hasta = Math.max(c.hasta ?? 0, h * 1000);
+  }
+  return r;
+}
+
+/** Texto del cupo de una cuenta: "OK" o "sin cupo hasta HH:MM" (hora local). */
+export function textoCupo(c: { sinCupo: boolean; hasta: number | null }): string {
+  if (!c.sinCupo) return 'OK';
+  if (!c.hasta) return 'sin cupo';
+  const d = new Date(c.hasta);
+  return `sin cupo hasta ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
 /** Hora (local) en que vuelve la cuota, o null si no se sabe. */

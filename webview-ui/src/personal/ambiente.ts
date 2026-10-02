@@ -26,7 +26,7 @@ import { isWalkable } from '../office/layout/tileMap.js';
 import type { Character } from '../office/types.js';
 import { CharacterState, Direction } from '../office/types.js';
 import { conversar, turnosDe } from './burbujas.js';
-import { calcularLuces, type EstadoLuz, setLuces } from './luces.js';
+import { calcularLuces, type EstadoLuz, setLuces, setSalasPrendidas } from './luces.js';
 import {
   actividadDe,
   elegirPunto,
@@ -39,6 +39,7 @@ import {
   puntosDePresentacion,
 } from './lugares.js';
 import { deployDe, dormidoDe, enUso, padreDe, presentandoDe, statusDe, vozDe } from './personal.js';
+import { marcoPizarra, setGentePizarra } from './pizarra.js';
 import {
   DURACION_PROYECTO_MS,
   ESPERA_LLEGADA_MS,
@@ -76,7 +77,8 @@ function puntos(os: OfficeState): Punto[] {
   const p = [
     ...deLugares,
     ...puntosDePresentacion(
-      deLugares,
+      { cols: layout.cols, areaTiles: layout.areaTiles },
+      (col, row) => isWalkable(col, row, os.tileMap, os.blockedTiles),
       puntosDeAsientos(asientos, SALA_PRESENTACIONES, 'presentacion'),
     ),
     ...puntosDeAsientos(asientos, SALA_CAFETERIA, 'cafeteria'),
@@ -100,9 +102,11 @@ function ocupadosPara(os: OfficeState, ch: Character): Set<string> {
 // ── El escritorio de cada uno ───────────────────────────────────
 
 /**
- * El "escritorio" de cada sub-agente: un escritorio libre (silla sin dueño) de la oficina del que lo lanzó, el más
- * cercano a él; si no queda ninguno, el piso libre más cercano a su silla, sin pegarse a otro sub-agente (al menos un
- * tile de por medio, para que no se pisen ni sus etiquetas).
+ * El "escritorio" de cada sub-agente: un escritorio libre de la oficina del que lo lanzó, el más cercano a él. Libre =
+ * sin dueño o con su dueño descansando en la cafetería (en una oficina con varias sesiones todos los escritorios tienen
+ * dueño, aunque estén vacíos); los sin dueño se eligen antes. Si no queda ninguno, el piso libre más cercano a su silla,
+ * sin pegarse a otro sub-agente (al menos un tile de por medio, para que no se pisen ni sus etiquetas).
+ * tickPersonal lo revisa: si vuelve el dueño del escritorio prestado, o si quedó en el piso, lo vuelve a calcular.
  */
 interface Base {
   col: number;
@@ -110,47 +114,76 @@ interface Base {
   facingDir?: Direction;
   sentado?: boolean;
   silla?: string; // uid de la silla que tomó prestada
+  hecho: number; // cuándo se calculó (ms)
 }
 const bases = new Map<number, Base>();
 
-export function baseDe(os: OfficeState, sub: Character): Base {
+/** Cada cuánto se reintenta un escritorio para un sub-agente que quedó en el piso. */
+export const REINTENTO_BASE_MS = 5000;
+
+/** El dueño de esa silla la está usando o va a volver a usarla (no está descansando en la cafetería). */
+function duenoLaQuiere(os: OfficeState, silla: string): boolean {
+  for (const c of os.characters.values()) {
+    if (c.seatId === silla && !c.isSubagent) return c.lugar !== 'cafeteria';
+  }
+  return false;
+}
+
+export function baseDe(os: OfficeState, sub: Character, ahora = Date.now()): Base {
   const padre = sub.parentAgentId !== null ? os.characters.get(sub.parentAgentId) : undefined;
   const silla = padre?.seatId ? os.seats.get(padre.seatId) : undefined;
-  if (!padre?.seatId || !silla) return { col: sub.tileCol, row: sub.tileRow };
+  if (!padre?.seatId || !silla) return { col: sub.tileCol, row: sub.tileRow, hecho: ahora };
   const oficina = os.seatZone(padre.seatId);
   if (oficina) {
-    const tomadas = new Set<string>();
-    for (const b of bases.values()) if (b.silla) tomadas.add(b.silla);
-    for (const c of os.characters.values()) if (c.seatId) tomadas.add(c.seatId);
+    const prestadas = new Set<string>();
+    for (const [id, b] of bases) if (b.silla && id !== sub.id) prestadas.add(b.silla);
+    const duenos = new Map<string, Character>();
+    for (const c of os.characters.values()) if (c.seatId && !c.isSubagent) duenos.set(c.seatId, c);
     let libre: [string, typeof silla] | null = null;
-    let dist = Infinity;
+    let clave = Infinity;
     for (const [uid, s] of os.seats) {
-      if (s.assigned || tomadas.has(uid) || os.seatZone(uid) !== oficina) continue;
+      if (uid === padre.seatId || prestadas.has(uid) || os.seatZone(uid) !== oficina) continue;
+      const dueno = duenos.get(uid);
+      if (dueno ? dueno.lugar !== 'cafeteria' : s.assigned) continue;
       const d = Math.abs(s.seatCol - silla.seatCol) + Math.abs(s.seatRow - silla.seatRow);
-      if (d < dist) {
-        dist = d;
+      const k = (dueno ? 1000 : 0) + d;
+      if (k < clave) {
+        clave = k;
         libre = [uid, s];
       }
     }
     if (libre) {
       const [uid, s] = libre;
-      return { col: s.seatCol, row: s.seatRow, facingDir: s.facingDir, sentado: true, silla: uid };
+      return {
+        col: s.seatCol,
+        row: s.seatRow,
+        facingDir: s.facingDir,
+        sentado: true,
+        silla: uid,
+        hecho: ahora,
+      };
     }
   }
   const otras = [...bases.values()];
   const pegado = (t: { col: number; row: number }) =>
     otras.some((b) => Math.max(Math.abs(b.col - t.col), Math.abs(b.row - t.row)) < 2);
-  let mejor: Base = { col: sub.tileCol, row: sub.tileRow };
+  let mejor: Base = { col: sub.tileCol, row: sub.tileRow, hecho: ahora };
   let dist = Infinity;
   for (const t of os.walkableTiles) {
     if (pegado(t)) continue;
     const d = Math.abs(t.col - silla.seatCol) + Math.abs(t.row - silla.seatRow);
     if (d > 0 && d < dist) {
       dist = d;
-      mejor = t;
+      mejor = { col: t.col, row: t.row, hecho: ahora };
     }
   }
   return mejor;
+}
+
+/** Hay que volver a calcular el lugar del sub-agente: volvió el dueño del escritorio prestado, o quedó en el piso. */
+function revisarBase(os: OfficeState, b: Base, ahora: number): boolean {
+  if (b.silla) return duenoLaQuiere(os, b.silla);
+  return ahora - b.hecho >= REINTENTO_BASE_MS;
 }
 
 /** Solo para tests. */
@@ -262,7 +295,16 @@ export function tickPersonal(os: OfficeState, ahora = Date.now()): void {
   for (const id of bases.keys()) if (!os.characters.has(id)) bases.delete(id);
   for (const ch of os.characters.values()) {
     if (ch.matrixEffect) continue;
-    if (ch.isSubagent && !bases.has(ch.id)) bases.set(ch.id, baseDe(os, ch));
+    if (ch.isSubagent) {
+      const b = bases.get(ch.id);
+      if (!b) bases.set(ch.id, baseDe(os, ch, ahora));
+      else if (revisarBase(os, b, ahora)) {
+        const nueva = baseDe(os, ch, ahora);
+        const cambio = nueva.col !== b.col || nueva.row !== b.row;
+        bases.set(ch.id, nueva);
+        if (cambio && !ch.lugar) alEscritorio(ch); // está en su escritorio: que se mude ya
+      }
+    }
 
     // 1. Dormido (sin tokens): en su silla, quieto.
     if (!ch.isSubagent && dormidoDe(ch.id, ahora)) {
@@ -351,7 +393,42 @@ function pantallas(os: OfficeState): Array<{ col: number; row: number; w: number
   return out;
 }
 
+/**
+ * Salas con alguien trabajando ahora (de noche quedan iluminadas): la sala del tile donde está cada agente en uso, salvo
+ * los que descansan en la cafetería o duermen sin tokens.
+ */
+export function salasConGente(os: OfficeState, ahora: number): Set<string> {
+  const layout = os.getLayout();
+  const salas = new Set<string>();
+  for (const ch of os.characters.values()) {
+    if (ch.matrixEffect === 'despawn' || ch.lugar === 'cafeteria') continue;
+    if (!enUso(ch, ahora) || dormidoDe(ch.id, ahora)) continue;
+    const sala = layout.areaTiles?.[ch.tileRow * layout.cols + ch.tileCol];
+    if (sala) salas.add(sala);
+  }
+  return salas;
+}
+
+/** Para la pizarra del Brain: los agentes (sesiones) de cada proyecto que están trabajando ahora. */
+export function gentePorProyecto(os: OfficeState, ahora: number): Map<string, number[]> {
+  const gente = new Map<string, number[]>();
+  for (const ch of os.characters.values()) {
+    if (ch.isSubagent || ch.matrixEffect === 'despawn' || !ch.seatId) continue;
+    if (!enUso(ch, ahora) || dormidoDe(ch.id, ahora) || ch.lugar === 'cafeteria') continue;
+    const sala = os.seatZone(ch.seatId);
+    if (sala) gente.set(sala, [...(gente.get(sala) ?? []), ch.id]);
+  }
+  for (const ids of gente.values()) ids.sort((a, b) => a - b);
+  return gente;
+}
+
 function tickLuces(os: OfficeState, ahora: number): void {
+  setSalasPrendidas(salasConGente(os, ahora));
+  marcoPizarra(os.getLayout().furniture, (tipo) => {
+    const e = getCatalogEntry(tipo);
+    return e ? { w: e.footprintW, h: e.footprintH } : undefined;
+  });
+  setGentePizarra(gentePorProyecto(os, ahora));
   const estados: EstadoLuz[] = [];
   for (const ch of os.characters.values()) {
     if (ch.matrixEffect === 'despawn') continue;

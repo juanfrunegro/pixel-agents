@@ -18,6 +18,7 @@
  * cafetería y de Reuniones. En un plano editado a mano sin esas salas, vale el mueble más cercano de cualquier sala.
  */
 import {
+  ESCENARIO_FILA,
   SALA_BIBLIOTECA,
   SALA_CAFETERIA,
   SALA_DISENO,
@@ -239,14 +240,48 @@ export function elegirPunto(
 }
 
 /**
- * Lugar de quien presenta: parado frente a los pizarrones/pantallas de Presentaciones (los puntos "pizarron" de esa
- * sala) y, si están ocupados, las sillas de la sala (`sillas`, con menos prioridad).
+ * Lugar de quien presenta: parado en el escenario de Presentaciones, en el centro de la sala y mirando al público
+ * (abajo), lo bastante lejos de la pared para que su tarjeta quede dentro de la sala y no tape las pantallas. Si hay
+ * más de uno, a los costados del centro; si el escenario se llena (o el plano no lo tiene), las sillas de la sala
+ * (`sillas`, con menos prioridad).
  */
-export function puntosDePresentacion(puntos: Punto[], sillas: Punto[] = []): Punto[] {
-  return [
-    ...puntos
-      .filter((p) => p.area === SALA_PRESENTACIONES && p.lugar === 'pizarron')
-      .map((p) => ({ ...p, lugar: 'presentacion' as const, prioridad: 0 })),
-    ...sillas.map((p) => ({ ...p, lugar: 'presentacion' as const, prioridad: 1 })),
-  ];
+export function puntosDePresentacion(
+  plano: { cols: number; areaTiles?: Array<string | null> },
+  caminable: (col: number, row: number) => boolean,
+  sillas: Punto[] = [],
+): Punto[] {
+  const out: Punto[] = [];
+  const tiles = plano.areaTiles ?? [];
+  let minCol = Infinity;
+  let maxCol = -Infinity;
+  let minRow = Infinity;
+  tiles.forEach((a, i) => {
+    if (a !== SALA_PRESENTACIONES) return;
+    const col = i % plano.cols;
+    const row = Math.floor(i / plano.cols);
+    minCol = Math.min(minCol, col);
+    maxCol = Math.max(maxCol, col);
+    minRow = Math.min(minRow, row);
+  });
+  if (minRow !== Infinity) {
+    const centro = Math.floor((minCol + maxCol) / 2);
+    const row = minRow + ESCENARIO_FILA;
+    // El centro primero (aunque otro lugar quede más cerca de donde viene); los costados, si ya hay alguien.
+    for (const [col, prioridad] of [
+      [centro, 0],
+      [centro - 2, 1],
+      [centro + 2, 1],
+    ] as const) {
+      if (col < minCol || col > maxCol || !caminable(col, row)) continue;
+      out.push({
+        lugar: 'presentacion',
+        col,
+        row,
+        facingDir: Dir.DOWN,
+        area: SALA_PRESENTACIONES,
+        prioridad,
+      });
+    }
+  }
+  return [...out, ...sillas.map((p) => ({ ...p, lugar: 'presentacion' as const, prioridad: 2 }))];
 }

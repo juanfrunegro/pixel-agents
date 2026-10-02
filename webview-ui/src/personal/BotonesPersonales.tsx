@@ -1,6 +1,6 @@
 /**
- * Personal (copia de juanfrunegro): botones "Recargar", filtro "Todos | Windows | WSL", "Organigrama" y "Apagar" de la
- * barra de abajo (solo en el navegador). Recargar vuelve a armar las salas con los proyectos de Orca sin reiniciar el servidor y recarga la
+ * Personal (copia de juanfrunegro): botones "Recargar", filtro "Todos | Windows | WSL", "Organigrama", "Hoy" (resumen del
+ * día) y "Apagar" de la barra de abajo, y el cupo de cada cuenta (solo en el navegador). Recargar vuelve a armar las salas con los proyectos de Orca sin reiniciar el servidor y recarga la
  * página. Apagar pide confirmación con un segundo clic y apaga el servidor; se vuelve a abrir solo con el próximo
  * agente.
  */
@@ -9,7 +9,43 @@ import { useEffect, useState } from 'react';
 import { Button } from '../components/ui/Button.js';
 import { isBrowserRuntime } from '../runtime.js';
 import { transport } from '../transport/index.js';
+import { COLOR_AVISO, COLOR_WINDOWS, COLOR_WSL } from './colores.js';
 import { setFiltroSistema, type Sistema, useFiltroSistema } from './filtro.js';
+import { type Cuenta, cupoPorCuenta, textoCupo, usePersonal } from './personal.js';
+
+const CUENTAS: Array<{ id: Cuenta; texto: string; color: string }> = [
+  { id: 'windows', texto: 'Windows', color: COLOR_WINDOWS },
+  { id: 'wsl', texto: 'WSL', color: COLOR_WSL },
+];
+
+/**
+ * Cupo de cada cuenta. Claude Code no dice cuánto queda (solo avisa cuando se acabó), así que no hay barra: OK, o sin
+ * cupo hasta la hora de vuelta. Se recalcula cada 30 s para que vuelva a OK solo.
+ */
+function Cupos() {
+  usePersonal();
+  const [, setTic] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setTic((n) => n + 1), 30_000);
+    return () => clearInterval(t);
+  }, []);
+  const cupo = cupoPorCuenta();
+  return (
+    <span
+      className="flex items-center gap-8 px-6 text-lg"
+      style={{ whiteSpace: 'nowrap' }}
+      data-testid="cupos"
+      title="Cupo de cada cuenta: Claude Code solo avisa cuando se acaba, no cuánto queda"
+    >
+      {CUENTAS.map((c) => (
+        <span key={c.id} style={{ color: cupo[c.id].sinCupo ? COLOR_AVISO : undefined }}>
+          <span style={{ color: c.color, fontWeight: 'bold' }}>{c.texto}:</span>{' '}
+          {textoCupo(cupo[c.id])}
+        </span>
+      ))}
+    </span>
+  );
+}
 
 const SISTEMAS: Array<{ id: Sistema; texto: string; title: string }> = [
   { id: 'todos', texto: 'Todos', title: 'Ver todos los agentes con su color' },
@@ -76,6 +112,12 @@ export function BotonesPersonales() {
         Organigrama
       </Button>
       <Button
+        onClick={() => window.open(`/hoy?token=${encodeURIComponent(token)}`, '_blank', 'noopener')}
+        title="Cuánto trabajó hoy cada proyecto y cada agente, y cuánto costó"
+      >
+        Hoy
+      </Button>
+      <Button
         variant={confirmar ? 'active' : 'default'}
         onClick={() => {
           if (!confirmar) {
@@ -90,6 +132,7 @@ export function BotonesPersonales() {
       >
         {confirmar ? '¿Apagar? (clic de nuevo)' : 'Apagar'}
       </Button>
+      <Cupos />
     </>
   );
 }

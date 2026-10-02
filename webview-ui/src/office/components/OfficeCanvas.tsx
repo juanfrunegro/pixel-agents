@@ -10,6 +10,7 @@ import {
 } from '../../constants.js';
 import { unlockAudio } from '../../notificationSound.js';
 import { CamaraPersonal } from '../../personal/camara.js';
+import { clicPersonal } from '../../personal/pizarra.js';
 import { transport } from '../../transport/index.js';
 import { getColorizedSprite } from '../colorize.js';
 import { canPlaceFurniture, getWallPlacementRow } from '../editor/editorActions.js';
@@ -763,6 +764,12 @@ export function OfficeCanvas({
           officeState.showPetBubble(petId);
         }
         return;
+      }
+
+      // personal: sin agente elegido, clic en la pizarra del Brain (panel) o en una oficina de proyecto (menú)
+      if (officeState.selectedAgentId === null) {
+        const tile = screenToTile(e.clientX, e.clientY);
+        if (tile && clicPersonal(officeState.getLayout(), tile, e.clientX, e.clientY)) return;
       }
 
       // No agent hit — check seat click while agent is selected

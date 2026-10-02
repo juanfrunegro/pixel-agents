@@ -23,3 +23,13 @@ export const COLOR_LUZ_DEPLOY = '#ffaa1d';
 export const COLOR_LUZ_PRESENTACION = '#fff1b8';
 export const COLOR_PANTALLA = '#c9f0ff';
 export const COLOR_NUBE = '#e4e4ec';
+/** Personal (tanda 3): luz según la hora (noche y atardecer) y pizarra del Brain. */
+export const COLOR_NOCHE = '#0b1030';
+export const COLOR_CALIDO = '#ff9a3c';
+export const COLOR_PIZARRA_FONDO = '#1e2a24';
+export const COLOR_PIZARRA_BORDE = '#7a5a36';
+export const COLOR_PIZARRA_TEXTO = '#e9efe6';
+export const COLOR_PIZARRA_GENTE = '#ffd34d';
+export const COLOR_AVISO = '#f59e0b';
+export const COLOR_SALA_SIN_COLOR = '#9aa0ab';
+export const COLOR_VELO = 'rgba(0, 0, 0, 0.35)';
