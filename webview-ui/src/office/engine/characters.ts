@@ -46,6 +46,14 @@ function directionBetween(
   return Direction.UP;
 }
 
+/** Personal: adónde va mientras trabaja: su destino (biblioteca, pizarrón…) o, si no tiene, su silla. */
+function puestoActivo(
+  ch: Character,
+  seats: Map<string, Seat>,
+): Pick<Seat, 'seatCol' | 'seatRow' | 'facingDir'> | undefined {
+  return ch.destino ?? (ch.seatId ? seats.get(ch.seatId) : undefined);
+}
+
 export function createCharacter(
   id: number,
   palette: number,
@@ -105,6 +113,16 @@ export function updateCharacter(
         ch.frameTimer -= TYPE_FRAME_DURATION_SEC;
         ch.frame = (ch.frame + 1) % 2;
       }
+      // personal: si le cambió el destino mientras trabajaba, se levanta y va
+      if (ch.isActive) {
+        const p = puestoActivo(ch, seats);
+        if (p && (ch.tileCol !== p.seatCol || ch.tileRow !== p.seatRow)) {
+          ch.state = CharacterState.IDLE;
+          ch.frame = 0;
+          ch.frameTimer = 0;
+          break;
+        }
+      }
       // If no longer active, stand up and start wandering (after seatTimer expires)
       if (!ch.isActive) {
         if (ch.seatTimer > 0) {
@@ -128,14 +146,14 @@ export function updateCharacter(
       if (ch.seatTimer < 0) ch.seatTimer = 0; // clear turn-end sentinel
       // If became active, pathfind to seat
       if (ch.isActive) {
-        if (!ch.seatId) {
+        if (!ch.seatId && !ch.destino) {
           // No seat assigned — type in place
           ch.state = CharacterState.TYPE;
           ch.frame = 0;
           ch.frameTimer = 0;
           break;
         }
-        const seat = seats.get(ch.seatId);
+        const seat = puestoActivo(ch, seats); // personal: destino o silla
         if (seat) {
           const path = findPath(
             ch.tileCol,
@@ -151,6 +169,9 @@ export function updateCharacter(
             ch.state = CharacterState.WALK;
             ch.frame = 0;
             ch.frameTimer = 0;
+          } else if (ch.destino && (ch.tileCol !== seat.seatCol || ch.tileRow !== seat.seatRow)) {
+            // personal: no hay camino al destino: lo abandona y vuelve a la silla en el próximo paso
+            ch.destino = undefined;
           } else {
             // Already at seat or no path — sit down
             ch.state = CharacterState.TYPE;
@@ -224,11 +245,11 @@ export function updateCharacter(
         ch.y = center.y;
 
         if (ch.isActive) {
-          if (!ch.seatId) {
+          if (!ch.seatId && !ch.destino) {
             // No seat — type in place
             ch.state = CharacterState.TYPE;
           } else {
-            const seat = seats.get(ch.seatId);
+            const seat = puestoActivo(ch, seats); // personal: destino o silla
             if (seat && ch.tileCol === seat.seatCol && ch.tileRow === seat.seatRow) {
               ch.state = CharacterState.TYPE;
               ch.dir = seat.facingDir;
@@ -291,8 +312,8 @@ export function updateCharacter(
       }
 
       // If became active while wandering, repath to seat
-      if (ch.isActive && ch.seatId) {
-        const seat = seats.get(ch.seatId);
+      if (ch.isActive && (ch.seatId || ch.destino)) {
+        const seat = puestoActivo(ch, seats); // personal: destino o silla
         if (seat) {
           const lastStep = ch.path[ch.path.length - 1];
           if (!lastStep || lastStep.col !== seat.seatCol || lastStep.row !== seat.seatRow) {

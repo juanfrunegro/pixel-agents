@@ -252,6 +252,13 @@ export interface Character {
   contextTokens: number;
   /** Window `contextTokens` is measured against. */
   maxContextTokens: number;
+
+  // -- Personal (copia de juanfrunegro): lugar según la actividad (personal/lugares.ts) --
+  /** Mientras trabaja, va acá en vez de a su silla (biblioteca, pizarrón…). undefined = su silla. */
+  destino?: { seatCol: number; seatRow: number; facingDir: Direction };
+  /** Lugar al que va ahora y desde cuándo (ms), para no ir y venir con cada herramienta. */
+  lugar?: string | null;
+  lugarDesde?: number;
 }
 
 export const PetState = { IDLE: 'idle', WALK: 'walk', FOLLOW: 'follow' } as const;
