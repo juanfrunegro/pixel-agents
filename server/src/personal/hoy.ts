@@ -25,6 +25,8 @@ export interface Trabajo {
   wsl: boolean;
   activoMs: number;
   costo: number;
+  /** Tokens de hoy: entrada + salida + caché (escritura y lectura). */
+  tokens: number;
   herramientas: Map<string, number>;
 }
 
@@ -51,6 +53,7 @@ export function trabajoDe(
   const herramientas = new Map<string, number>();
   const vistos = new Set<string>();
   let costo = 0;
+  let tokens = 0;
   let cwd: string | undefined;
   for (const linea of texto.split('\n')) {
     if (!linea.trim()) continue;
@@ -70,6 +73,12 @@ export function trabajoDe(
     if (m.usage && !vistos.has(clave)) {
       vistos.add(clave);
       costo += costoUsd(m.model, m.usage);
+      const u = m.usage;
+      tokens +=
+        (u.input_tokens ?? 0) +
+        (u.output_tokens ?? 0) +
+        (u.cache_creation_input_tokens ?? 0) +
+        (u.cache_read_input_tokens ?? 0);
     }
     if (Array.isArray(m.content)) {
       for (const b of m.content as Array<{ type?: string; name?: string }>) {
@@ -94,6 +103,7 @@ export function trabajoDe(
     wsl: datos.wsl,
     activoMs,
     costo,
+    tokens,
     herramientas,
   };
 }
@@ -192,6 +202,7 @@ export interface ResumenProyecto {
   sesiones: number;
   activoMs: number;
   costo: number;
+  tokens: number;
   agentes: FilaAgente[];
 }
 
@@ -208,12 +219,13 @@ export function resumirDia(trabajos: Trabajo[]): ResumenProyecto[] {
     let p = proyectos.get(t.proyecto);
     if (!p) {
       p = {
-        r: { proyecto: t.proyecto, sesiones: 0, activoMs: 0, costo: 0, agentes: [] },
+        r: { proyecto: t.proyecto, sesiones: 0, activoMs: 0, costo: 0, tokens: 0, agentes: [] },
         agentes: new Map(),
       };
       proyectos.set(t.proyecto, p);
     }
     p.r.costo += t.costo;
+    p.r.tokens += t.tokens ?? 0;
     if (!t.esSub) {
       p.r.sesiones++;
       p.r.activoMs += t.activoMs;
@@ -319,19 +331,65 @@ ${bloques || '<p class="vacio">Todavía no trabajó ningún agente hoy.</p>'}
 
 // Leer todos los transcripts del día (los de WSL por \\wsl.localhost) tarda: se rehace como mucho cada 2 minutos.
 const VIGENCIA_MS = 2 * 60_000;
-let cache: { hecho: number; html: string } | null = null;
+let cache: { hecho: number; resumen: ResumenProyecto[]; html: string } | null = null;
 
-/** Rutas GET /hoy (resumen del día) y GET /pizarra (pendientes del Brain, JSON): solo con el token de la oficina. */
-export function registrarHoy(app: FastifyInstance, token: string, pizarra: () => unknown): void {
+function resumenVigente(ahora = Date.now()): { resumen: ResumenProyecto[]; html: string } {
+  if (!cache || ahora - cache.hecho > VIGENCIA_MS) {
+    const resumen = resumirDia(trabajosDeHoy());
+    cache = { hecho: ahora, resumen, html: htmlHoy(resumen) };
+  }
+  return cache;
+}
+
+/** Sin cupo por cuenta: hasta cuándo (segundos epoch; 0 = sin hora de vuelta), o null si esa cuenta tiene cupo. */
+export interface CupoPorCuenta {
+  windows: number | null;
+  wsl: number | null;
+}
+
+/** Lo mismo que /hoy pero en JSON, para coucou: totales y por proyecto (sin el detalle por agente). */
+export function jsonHoy(resumen: ResumenProyecto[], cupo: CupoPorCuenta, ahora = Date.now()) {
+  const redondo = (n: number) => Math.round(n * 100) / 100;
+  return {
+    generado: ahora,
+    total: {
+      sesiones: resumen.reduce((s, p) => s + p.sesiones, 0),
+      activoMs: resumen.reduce((s, p) => s + p.activoMs, 0),
+      costo: redondo(resumen.reduce((s, p) => s + p.costo, 0)),
+      tokens: resumen.reduce((s, p) => s + p.tokens, 0),
+    },
+    proyectos: resumen.map((p) => ({
+      proyecto: p.proyecto,
+      sesiones: p.sesiones,
+      activoMs: p.activoMs,
+      costo: redondo(p.costo),
+      tokens: p.tokens,
+      wsl: p.agentes.some((a) => a.wsl),
+    })),
+    cupo,
+  };
+}
+
+/**
+ * Rutas GET /hoy (resumen del día), GET /hoy.json (lo mismo para coucou, con el cupo por cuenta) y GET /pizarra
+ * (pendientes del Brain, JSON): solo con el token de la oficina.
+ */
+export function registrarHoy(
+  app: FastifyInstance,
+  token: string,
+  pizarra: () => unknown,
+  cupo: () => CupoPorCuenta = () => ({ windows: null, wsl: null }),
+): void {
   const conToken = (url: string) =>
     !!token && (new URL(url, 'http://localhost').searchParams.get('token') ?? '') === token;
   app.get('/hoy', async (request, reply) => {
     if (!conToken(request.url)) return reply.code(403).send('Falta el token de la oficina.');
-    const ahora = Date.now();
-    if (!cache || ahora - cache.hecho > VIGENCIA_MS) {
-      cache = { hecho: ahora, html: htmlHoy(resumirDia(trabajosDeHoy())) };
-    }
-    return reply.type('text/html; charset=utf-8').send(cache.html);
+    return reply.type('text/html; charset=utf-8').send(resumenVigente().html);
+  });
+  app.get('/hoy.json', async (request, reply) => {
+    if (!conToken(request.url))
+      return reply.code(403).send({ error: 'Falta el token de la oficina.' });
+    return reply.send(jsonHoy(resumenVigente().resumen, cupo()));
   });
   app.get('/pizarra', async (request, reply) => {
     if (!conToken(request.url))

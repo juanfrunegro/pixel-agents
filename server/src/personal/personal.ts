@@ -320,6 +320,24 @@ function aplicarLimite(info: InfoSesion, r: Registro): boolean {
   return antes !== info.dormidoHasta;
 }
 
+/**
+ * Sin cupo por cuenta (Windows = Pro, WSL = Max), para /hoy.json: la hora de vuelta más tardía entre las sesiones
+ * dormidas de esa cuenta (0 = dormida sin hora). Una hora que ya pasó no cuenta. null = esa cuenta tiene cupo.
+ */
+export function cupoPorCuenta(
+  agentes: Iterable<AgentState>,
+  ahoraS = Date.now() / 1000,
+): { windows: number | null; wsl: number | null } {
+  const out: { windows: number | null; wsl: number | null } = { windows: null, wsl: null };
+  for (const a of agentes) {
+    const hasta = sesiones.get(a)?.dormidoHasta;
+    if (hasta === undefined || (hasta > 0 && hasta <= ahoraS)) continue;
+    const k = esDeWsl(a.jsonlFile) ? 'wsl' : 'windows';
+    out[k] = Math.max(out[k] ?? 0, hasta);
+  }
+  return out;
+}
+
 /** Sesión de WSL leída desde Windows (\\wsl.localhost\… o \\wsl$\…): otra cuenta (Max). */
 export function esDeWsl(archivo: string | undefined): boolean {
   return !!archivo && /^[\\/]{2}wsl(\.localhost|\$)[\\/]/i.test(archivo);

@@ -277,7 +277,7 @@ describe('tanda 3: resumen del día', () => {
   });
 
   it('agrupa por proyecto y agente; el tiempo del proyecto es el de sus sesiones', () => {
-    const base = { herramientas: new Map([['Read', 1]]), wsl: false, archivo: 'a' };
+    const base = { herramientas: new Map([['Read', 1]]), wsl: false, archivo: 'a', tokens: 0 };
     const r = resumirDia([
       { ...base, proyecto: 'ERP', agente: 'Juan', esSub: false, activoMs: 60_000, costo: 1 },
       { ...base, proyecto: 'ERP', agente: 'Juan', esSub: false, activoMs: 120_000, costo: 2 },
@@ -311,6 +311,7 @@ describe('tanda 3: resumen del día', () => {
           wsl: true,
           activoMs: 3_900_000,
           costo: 1.234,
+          tokens: 0,
           herramientas: new Map(),
         },
       ]),

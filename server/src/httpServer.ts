@@ -21,6 +21,7 @@ import {
 } from './constants.js';
 import { registrarHoy } from './personal/hoy.js';
 import { registrarOrganigrama } from './personal/organigrama.js';
+import { cupoPorCuenta } from './personal/personal.js';
 import { pizarra } from './personal/pizarra.js';
 import type { AgentState } from './types.js';
 
@@ -89,7 +90,10 @@ export async function createHttpServer(options: HttpServerOptions): Promise<Http
 
   registerHealthRoute(app);
   registrarOrganigrama(app, options.token); // personal
-  registrarHoy(app, options.token, pizarra); // personal: /hoy y /pizarra
+  // personal: /hoy, /hoy.json (coucou) y /pizarra
+  registrarHoy(app, options.token, pizarra, () =>
+    cupoPorCuenta([...options.store].map(([, a]) => a)),
+  );
   registerHookRoute(app, options);
   registerWebSocketRoute(app, options);
 
