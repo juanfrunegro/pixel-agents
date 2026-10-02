@@ -85,18 +85,39 @@ describe('personal: oficina según los proyectos de Orca', () => {
   it('el plano tiene una sala por proyecto y los asientos de una sala no cambian de uid al sumar otra', () => {
     const seis = generarLayout(plano, salasDesde(ORCA.slice(0, 5)).salas);
     const ocho = generarLayout(plano, salasDesde(ORCA).salas);
-    expect(ocho.cols).toBe(33);
+    expect(ocho.cols).toBe(3 * 18); // sala original (11) + anexo (6) + pared
     expect(ocho.rows).toBe(1 + 3 * 12 + 1);
     const uids = (l: Record<string, unknown>) =>
       new Set((l.furniture as Array<{ uid: string }>).map((f) => f.uid));
     for (const uid of uids(seis)) expect(uids(ocho).has(uid)).toBe(true);
     const tiles = ocho.tiles as number[];
     // Sin franjas de piso fuera de las salas: la fila de margen es vacío (255), no piso.
-    expect(tiles.slice(0, 33).every((t) => t === 255)).toBe(true);
+    expect(tiles.slice(0, 54).every((t) => t === 255)).toBe(true);
     const areas = new Set((ocho.areaTiles as Array<string | null>).filter(Boolean));
     expect(areas).toEqual(
       new Set(['Brain', 'Chaina', 'Poker', 'Finanzas', 'ERP', 'QF', 'Trading Bot', 'Otros']),
     );
+  });
+
+  it('cada sala tiene un anexo con biblioteca y pizarrón, sin puestos, al que se entra por la puerta', () => {
+    const l = generarLayout(plano, salasDesde(ORCA.slice(0, 1)).salas);
+    const cols = l.cols as number;
+    const tiles = l.tiles as number[];
+    const muebles = l.furniture as Array<{ uid: string; type: string; col: number; row: number }>;
+    const anexo = muebles.filter((f) => f.uid.startsWith('anexo-'));
+    expect(anexo.map((f) => f.type)).toEqual(
+      expect.arrayContaining(['DOUBLE_BOOKSHELF', 'WHITEBOARD']),
+    );
+    expect(anexo.some((f) => /CHAIR|BENCH/.test(f.type))).toBe(false);
+    // Fila 0 = margen; la sala arranca en la fila 1 (fila 9 del plano original).
+    const en = (c: number, filaOriginal: number) => tiles[(filaOriginal - 8) * cols + c];
+    expect(en(10, 15)).not.toBe(0); // puerta en la pared del medio
+    expect(en(10, 12)).toBe(0); // el resto de esa pared sigue
+    expect(en(13, 15)).toBe(en(1, 15)); // piso del anexo = piso de la sala
+    expect(en(17, 15)).toBe(0); // pared derecha del anexo
+    expect(en(13, 10)).toBe(0); // pared de arriba del anexo
+    const areas = l.areaTiles as Array<string | null>;
+    expect(areas[(15 - 8) * cols + 13]).toBe('ERP');
   });
 
   it('lee los proyectos del archivo de Orca y no rompe si no existe', () => {

@@ -2,8 +2,9 @@
  * Personal (copia de juanfrunegro): oficina con una sala por proyecto de Orca, regenerable en caliente con el botón
  * "Recargar" (antes: ~/.claude/tools/pixel-oficina/generar.py con Pixel apagado).
  *
- * Toma la sala de trabajo del plano original (escritorios, 4 sillas y 2 bancos) y la repite en una grilla de 3
- * columnas, una por proyecto de Orca más "Otros". Cada sala es un Área y cada proyecto cae en la suya. Los uid de los
+ * Toma la sala de trabajo del plano original (escritorios, 4 sillas y 2 bancos), le suma al costado un anexo con
+ * biblioteca y pizarrón (adonde van los agentes según lo que hacen, ver webview-ui/src/personal/lugares.ts) y la repite
+ * en una grilla de 3 columnas, una por proyecto de Orca más "Otros". Cada sala es un Área y cada proyecto cae en la suya. Los uid de los
  * muebles llevan el nombre de la sala, así que una sala que ya existía conserva sus asientos al recargar.
  */
 import * as fs from 'fs';
@@ -145,7 +146,9 @@ const FILA1 = 20;
 const COL0 = 0;
 const COL1 = 10;
 const ALTO = FILA1 - FILA0 + 1;
-const ANCHO = COL1 - COL0 + 1;
+/** Anexo a la derecha de la sala original: se entra por la puerta de su pared derecha (col 10, filas 14 a 17). */
+const ANEXO = 6;
+const ANCHO = COL1 - COL0 + 1 + ANEXO + 1; // sala original + anexo + pared derecha
 const MARGEN = 1;
 const POR_FILA = 3;
 
@@ -156,6 +159,18 @@ interface Mueble {
   row: number;
   [k: string]: unknown;
 }
+
+/**
+ * Muebles del anexo, en coordenadas de la sala (col 0 = pared izquierda, fila 9 = decoración de pared). Sin sillas ni
+ * bancos: si no, el anexo tendría puestos y los agentes se sentarían ahí a trabajar.
+ */
+export const MUEBLES_ANEXO: Array<{ id: string; type: string; col: number; row: number }> = [
+  { id: 'biblio-1', type: 'DOUBLE_BOOKSHELF', col: 11, row: 9 },
+  { id: 'biblio-2', type: 'DOUBLE_BOOKSHELF', col: 13, row: 9 },
+  { id: 'pizarron', type: 'WHITEBOARD', col: 15, row: 9 },
+  { id: 'planta-1', type: 'PLANT', col: 11, row: 19 },
+  { id: 'planta-2', type: 'LARGE_PLANT', col: 15, row: 18 },
+];
 
 /** Plano con una sala por entrada, armado a partir del plano original. */
 export function generarLayout(
@@ -175,9 +190,14 @@ export function generarLayout(
   const tc: unknown[] = new Array(cols * rows).fill(null);
   const area: Array<string | null> = new Array(cols * rows).fill(null);
   const furniture: Mueble[] = [];
+  // Piso y pared del anexo: los mismos que la sala original.
+  const piso = tiles[(FILA0 + 2) * C + COL0 + 1];
+  const colorPiso = colores[(FILA0 + 2) * C + COL0 + 1] ?? null;
+  const colorPared = colores[(FILA0 + 1) * C + COL0] ?? null;
   salas.forEach(({ nombre }, i) => {
     const dc = (i % POR_FILA) * ANCHO - COL0;
     const df = MARGEN + Math.floor(i / POR_FILA) * ALTO - FILA0;
+    const sufijo = nombre.toLowerCase().replace(/\s+/g, '-');
     for (let r = FILA0; r <= FILA1; r++) {
       for (let c = COL0; c <= COL1; c++) {
         const k = r * C + c;
@@ -186,14 +206,26 @@ export function generarLayout(
         tc[j] = colores[k] ?? null;
         if (tiles[k] !== VACIO && tiles[k] !== PARED && r > FILA0 + 1) area[j] = nombre;
       }
+      // Anexo: pared arriba (fila 10) y a la derecha, piso en el resto; la fila 9 queda vacía (decoración).
+      for (let c = COL1 + 1; c <= COL1 + ANEXO + 1; c++) {
+        if (r === FILA0) continue;
+        const j = (r + df) * cols + (c + dc);
+        const esPared = r === FILA0 + 1 || c === COL1 + ANEXO + 1;
+        t[j] = esPared ? PARED : piso;
+        tc[j] = esPared ? colorPared : colorPiso;
+        if (!esPared) area[j] = nombre;
+      }
     }
     for (const f of muebles) {
       furniture.push({
         ...f,
-        uid: `${f.uid}-${nombre.toLowerCase().replace(/\s+/g, '-')}`,
+        uid: `${f.uid}-${sufijo}`,
         col: f.col + dc,
         row: f.row + df,
       });
+    }
+    for (const { id, ...f } of MUEBLES_ANEXO) {
+      furniture.push({ ...f, uid: `anexo-${id}-${sufijo}`, col: f.col + dc, row: f.row + df });
     }
   });
   return {
