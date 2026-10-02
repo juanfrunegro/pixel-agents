@@ -46,6 +46,7 @@ import { seedContextUsage } from './contextUsage.js';
 import type { DismissalTracker } from './dismissalTracker.js';
 import { assignPaletteIfNeeded } from './paletteAssigner.js';
 import { pathsMatch } from './pathKey.js';
+import { anotarDormido, olvidarNoVistos, saltearDormido } from './personal/escaneo.js';
 import type { SubagentWatch } from './subagentWatch.js';
 import { cancelPermissionTimer, cancelWaitingTimer, clearAgentActivity } from './timerManager.js';
 import { getHookProvider, processTranscriptLine } from './transcriptParser.js';
@@ -1500,6 +1501,7 @@ function scanGlobalProjectDirs(
   }
 
   const now = Date.now();
+  const vistos = new Set<string>(); // personal: para olvidar los dormidos que ya no existen
   for (const dirPath of projectDirs) {
     // Skip directories already tracked by workspace scanning
     if (isTrackedProjectDir(dirPath)) continue;
@@ -1515,7 +1517,10 @@ function scanGlobalProjectDirs(
     }
 
     for (const file of files) {
+      vistos.add(file);
       if (knownJsonlFiles.has(file)) continue;
+      // personal: un transcript dormido hace rato no se vuelve a mirar en cada escaneo (ver personal/escaneo.ts)
+      if (saltearDormido(file, now)) continue;
       let tracked = false;
       for (const agent of agents.values()) {
         if (pathsMatch(agent.jsonlFile, file)) {
@@ -1527,8 +1532,13 @@ function scanGlobalProjectDirs(
       // Activity filter: >3KB AND modified within 10 minutes
       try {
         const stat = fs.statSync(file);
-        if (stat.size < GLOBAL_SCAN_ACTIVE_MIN_SIZE) continue;
-        if (now - stat.mtimeMs > GLOBAL_SCAN_ACTIVE_MAX_AGE_MS) continue;
+        if (
+          stat.size < GLOBAL_SCAN_ACTIVE_MIN_SIZE ||
+          now - stat.mtimeMs > GLOBAL_SCAN_ACTIVE_MAX_AGE_MS
+        ) {
+          anotarDormido(file, stat.mtimeMs, now); // personal
+          continue;
+        }
       } catch {
         continue;
       }
@@ -1554,6 +1564,7 @@ function scanGlobalProjectDirs(
       );
     }
   }
+  olvidarNoVistos(vistos); // personal
 }
 
 /**

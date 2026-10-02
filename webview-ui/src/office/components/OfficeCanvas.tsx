@@ -11,6 +11,11 @@ import {
 import { unlockAudio } from '../../notificationSound.js';
 import { CamaraPersonal } from '../../personal/camara.js';
 import { clicPersonal } from '../../personal/pizarra.js';
+import {
+  escucharInteraccion,
+  fpsObjetivo,
+  msDesdeInteraccion,
+} from '../../personal/rendimiento.js';
 import { transport } from '../../transport/index.js';
 import { getColorizedSprite } from '../colorize.js';
 import { canPlaceFurniture, getWallPlacementRow } from '../editor/editorActions.js';
@@ -127,7 +132,19 @@ export function OfficeCanvas({
       observer.observe(containerRef.current);
     }
 
+    // personal: cuadros por segundo según lo que pasa en pantalla (personal/rendimiento.ts)
+    escucharInteraccion();
+    let camaraMoviendose = false;
+
     const stop = startGameLoop(canvas, {
+      fps: () =>
+        fpsObjetivo({
+          editando: isEditMode,
+          camaraMoviendose,
+          personajes: officeState.characters.values(),
+          mascotas: officeState.pets,
+          msDesdeInteraccion: msDesdeInteraccion(),
+        }),
       update: (dt) => {
         officeState.update(dt);
       },
@@ -259,6 +276,7 @@ export function OfficeCanvas({
           followCh || !greeter
             ? deCamara
             : { x: mapW / 2 - greeter.x * zoom, y: mapH / 2 - greeter.y * zoom };
+        camaraMoviendose = false;
         if (target) {
           const targetX = target.x;
           const targetY = target.y;
@@ -271,6 +289,7 @@ export function OfficeCanvas({
             panRef.current = { x: targetX, y: targetY };
             if (!followCh && !greeter) camaraRef.current.llego();
           } else {
+            camaraMoviendose = true;
             panRef.current = {
               x: panRef.current.x + dx * CAMERA_FOLLOW_LERP,
               y: panRef.current.y + dy * CAMERA_FOLLOW_LERP,

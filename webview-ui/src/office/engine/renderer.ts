@@ -49,6 +49,7 @@ import { ALFA_APAGADO, apagadoPorFiltro } from '../../personal/filtro.js';
 import { renderLuces, renderNoche } from '../../personal/luces.js';
 import { colorModelo, modeloDe } from '../../personal/personal.js';
 import { renderPizarra } from '../../personal/pizarra.js';
+import { PisoCacheado } from '../../personal/rendimiento.js';
 import { getColorizedFloorSprite, hasFloorSprites, WALL_COLOR } from '../floorTiles.js';
 import { mapOffset } from '../projection.js';
 import {
@@ -896,6 +897,78 @@ export interface SelectionRenderState {
   characters: Map<number, Character>;
 }
 
+// ── personal: cachés de lo que no cambia entre cuadros (ver personal/rendimiento.ts) ──
+
+const pisoCacheado = new PisoCacheado();
+
+function pisoCacheadoDe(
+  tileMap: TileTypeVal[][],
+  tileColors: Array<ColorValue | null> | undefined,
+  carpetTiles: Array<CarpetTile | null> | undefined,
+  zoom: number,
+  cols: number,
+  rows: number,
+): { canvas: HTMLCanvasElement; margen: number } | null {
+  const s = TILE_SIZE * zoom;
+  const margen = s; // las alfombras se dibujan centradas en las esquinas: medio tile afuera del plano
+  const tmCols = tileMap.length > 0 ? tileMap[0].length : 0;
+  const ancho = Math.max(cols, tmCols) * s + 2 * margen;
+  const alto = Math.max(rows, tileMap.length) * s + 2 * margen;
+  const canvas = pisoCacheado.obtener(
+    {
+      tileMap,
+      tileColors,
+      carpetTiles,
+      zoom,
+      cols,
+      rows,
+      spritesListos: `${hasFloorSprites()}${hasCarpetSprites()}`,
+    },
+    ancho,
+    alto,
+    (c) => {
+      renderTileGrid(c, tileMap, margen, margen, zoom, tileColors, cols);
+      if (carpetTiles && carpetTiles.length > 0) {
+        renderCarpetLayer(c, carpetTiles, cols, rows, margen, margen, zoom);
+      }
+    },
+  );
+  return canvas ? { canvas, margen } : null;
+}
+
+let paredesMemo: {
+  tileMap: unknown;
+  tileColors: unknown;
+  cols: number | undefined;
+  furniture: FurnitureInstance[];
+  todo: FurnitureInstance[];
+} | null = null;
+
+function muebles(
+  tileMap: TileTypeVal[][],
+  tileColors: Array<ColorValue | null> | undefined,
+  cols: number | undefined,
+  furniture: FurnitureInstance[],
+  editando: boolean,
+): FurnitureInstance[] {
+  if (!hasWallSprites()) return furniture;
+  const m = paredesMemo;
+  if (
+    !editando &&
+    m &&
+    m.tileMap === tileMap &&
+    m.tileColors === tileColors &&
+    m.cols === cols &&
+    m.furniture === furniture
+  ) {
+    return m.todo;
+  }
+  const paredes = getWallInstances(tileMap, tileColors, cols);
+  const todo = paredes.length > 0 ? [...paredes, ...furniture] : furniture;
+  paredesMemo = editando ? null : { tileMap, tileColors, cols, furniture, todo };
+  return todo;
+}
+
 export function renderFrame(
   ctx: CanvasRenderingContext2D,
   canvasWidth: number,
@@ -929,12 +1002,19 @@ export function renderFrame(
   // the DOM overlays so a label lands exactly on the sprite it belongs to.
   const { offsetX, offsetY } = mapOffset(canvasWidth, canvasHeight, cols, rows, zoom, panX, panY);
 
-  // Draw tiles (floor + wall base color)
-  renderTileGrid(ctx, tileMap, offsetX, offsetY, zoom, tileColors, layoutCols);
+  // personal: piso + alfombras en un canvas aparte que se rehace solo cuando cambian (personal/rendimiento.ts)
+  const piso = editor ? null : pisoCacheadoDe(tileMap, tileColors, carpetTiles, zoom, cols, rows);
+  if (editor) pisoCacheado.invalidar();
+  if (piso) {
+    ctx.drawImage(piso.canvas, offsetX - piso.margen, offsetY - piso.margen);
+  } else {
+    // Draw tiles (floor + wall base color)
+    renderTileGrid(ctx, tileMap, offsetX, offsetY, zoom, tileColors, layoutCols);
 
-  // Carpet layer (above floor, below seat indicators / furniture / characters)
-  if (carpetTiles && carpetTiles.length > 0) {
-    renderCarpetLayer(ctx, carpetTiles, cols, rows, offsetX, offsetY, zoom);
+    // Carpet layer (above floor, below seat indicators / furniture / characters)
+    if (carpetTiles && carpetTiles.length > 0) {
+      renderCarpetLayer(ctx, carpetTiles, cols, rows, offsetX, offsetY, zoom);
+    }
   }
 
   // Area overlay (translucent color wash) — above carpets, below seat indicators
@@ -957,8 +1037,8 @@ export function renderFrame(
   }
 
   // Build wall instances for z-sorting with furniture and characters
-  const wallInstances = hasWallSprites() ? getWallInstances(tileMap, tileColors, layoutCols) : [];
-  const allFurniture = wallInstances.length > 0 ? [...wallInstances, ...furniture] : furniture;
+  // personal: las paredes no cambian entre cuadros; se recalculan solo si cambia el plano (o en el editor)
+  const allFurniture = muebles(tileMap, tileColors, layoutCols, furniture, !!editor);
 
   // Draw walls + furniture + characters (z-sorted)
   const selectedId = selection?.selectedAgentId ?? null;

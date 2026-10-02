@@ -21,6 +21,7 @@ import type { SubagentCharacter } from '../../hooks/useExtensionMessages.js';
 import { enCafeteria, separarEtiquetas } from '../../personal/etiquetas.js';
 import { apagadoPorFiltro, useFiltroSistema } from '../../personal/filtro.js';
 import { colorModelo, modeloDe, nombreDe } from '../../personal/personal.js';
+import { alDibujar } from '../../personal/rendimiento.js';
 import { senalesDe } from '../../personal/senales.js';
 import { SenalesTarjeta } from '../../personal/SenalesTarjeta.js';
 import { estaSentado } from '../engine/characters.js';
@@ -100,15 +101,8 @@ export function ToolOverlay({
 }: ToolOverlayProps) {
   const [, setTick] = useState(0);
   const filtro = useFiltroSistema(); // personal: filtro Windows/WSL
-  useEffect(() => {
-    let rafId = 0;
-    const tick = () => {
-      setTick((n) => n + 1);
-      rafId = requestAnimationFrame(tick);
-    };
-    rafId = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(rafId);
-  }, []);
+  // personal: las tarjetas siguen al cuadro dibujado (10–30 fps según la escena), no a cada rAF del monitor
+  useEffect(() => alDibujar(() => setTick((n) => n + 1)), []);
 
   const el = containerRef.current;
   if (!el) return null;
