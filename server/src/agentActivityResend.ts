@@ -67,6 +67,11 @@ export function resendAgentActivity(
       });
     }
 
+    // Personal: si ya estaba esperando tu permiso, que se vea también al abrir la página (o al Recargar)
+    if (agent.permissionSent && agent.activeToolIds.size > 0) {
+      send({ type: 'agentToolPermission', id });
+    }
+
     // 4. Waiting status
     if (agent.isWaiting) {
       send({

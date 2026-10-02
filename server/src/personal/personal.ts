@@ -10,6 +10,14 @@ import * as path from 'path';
 import { personaDe } from '../../../core/src/aspectoPersonal.js';
 import type { AgentStateStore } from '../agentStateStore.js';
 import type { AgentState } from '../types.js';
+import {
+  aplicarSenal,
+  resumen,
+  type Senales,
+  senalesNuevas,
+  sesionDe,
+  vozPedida,
+} from './senales.js';
 
 // Rutas calculadas al usarlas (no al importar): los tests del original simulan os.homedir().
 const claude = (): string => path.join(os.homedir() || '.', '.claude');
@@ -259,6 +267,12 @@ interface InfoSesion {
   vistos: Set<string>;
   /** Se quedó sin tokens: hasta cuándo (segundos epoch; 0 = sin hora de vuelta). undefined = despierto. */
   dormidoHasta?: number;
+  /** Humo y deploy (senales.ts). */
+  senales: Senales;
+  /** Pidió el aviso por voz y todavía no se dijo. */
+  voz: boolean;
+  /** Cuándo se dijo el último aviso por voz (ms). */
+  presento?: number;
 }
 
 const sesiones = new WeakMap<AgentState, InfoSesion>();
@@ -318,15 +332,22 @@ function sumar(info: InfoSesion, r: Registro): boolean {
 function infoDe(agent: AgentState): InfoSesion {
   let info = sesiones.get(agent);
   if (info) return info;
-  info = { costo: 0, vistos: new Set() };
+  info = { costo: 0, vistos: new Set(), senales: senalesNuevas(), voz: false };
   sesiones.set(agent, info);
   try {
     for (const linea of fs.readFileSync(agent.jsonlFile, 'utf8').split('\n')) {
-      if (!linea.includes('"usage"') && !linea.includes('"rate_limit"')) continue;
+      if (
+        !linea.includes('"usage"') &&
+        !linea.includes('"rate_limit"') &&
+        !linea.includes('"tool_result"') &&
+        !linea.includes('"turn_duration"')
+      )
+        continue;
       try {
         const r = JSON.parse(linea) as Registro;
         sumar(info, r);
         aplicarLimite(info, r);
+        aplicarSenal(info.senales, r as never);
       } catch {
         /* línea a medio escribir */
       }
@@ -340,7 +361,18 @@ function infoDe(agent: AgentState): InfoSesion {
 export function mensajeInfo(agentId: number, agent: AgentState): Record<string, unknown> | null {
   const info = infoDe(agent);
   const wsl = esDeWsl(agent.jsonlFile);
-  if (!info.modelo && info.costo === 0 && !wsl && info.dormidoHasta === undefined) return null;
+  const senales = resumen(info.senales);
+  if (
+    !info.modelo &&
+    info.costo === 0 &&
+    !wsl &&
+    info.dormidoHasta === undefined &&
+    senales.errores === 0 &&
+    senales.deployDesde === null &&
+    !info.voz &&
+    info.presento === undefined
+  )
+    return null;
   return {
     type: 'agentInfo',
     id: agentId,
@@ -348,6 +380,9 @@ export function mensajeInfo(agentId: number, agent: AgentState): Record<string, 
     costUsd: Math.round(info.costo * 10000) / 10000,
     dormidoHasta: info.dormidoHasta ?? null,
     wsl,
+    ...senales,
+    voz: info.voz,
+    presento: info.presento ?? null,
   };
 }
 
@@ -362,8 +397,39 @@ export function registrarUso(
   const info = infoDe(agent);
   const sumo = sumar(info, record as Registro);
   const cambioLimite = aplicarLimite(info, record as Registro);
-  if (sumo || cambioLimite || primera) {
+  const cambioSenal = aplicarSenal(info.senales, record as never);
+  if (sumo || cambioLimite || cambioSenal || primera) {
     const msg = mensajeInfo(agentId, agent);
     if (msg) store.broadcast(msg as never);
+  }
+}
+
+const deployVisto = new WeakMap<AgentState, number | null>();
+
+/**
+ * Revisa la marca del aviso por voz de cada sesión (senales.ts) y avisa al webview cuando cambia: al aparecer, la
+ * sesión "va a presentar"; al desaparecer (el hook ya habló), queda la hora en que presentó. También re-manda la info
+ * de las sesiones con un deploy que venció solo. Lo llama cli.ts cada pocos segundos.
+ */
+export function revisarSenales(store: AgentStateStore, ahora = Date.now()): void {
+  for (const [id, agent] of store) {
+    if (!agent.jsonlFile) continue;
+    const info = sesiones.get(agent);
+    if (!info) continue;
+    let cambio = false;
+    const voz = vozPedida(sesionDe(agent.jsonlFile));
+    if (voz !== info.voz) {
+      if (!voz) info.presento = ahora;
+      info.voz = voz;
+      cambio = true;
+    }
+    const r = resumen(info.senales, ahora);
+    const ultimo = deployVisto.get(agent);
+    if (ultimo !== undefined && ultimo !== r.deployDesde) cambio = true;
+    deployVisto.set(agent, r.deployDesde);
+    if (cambio) {
+      const msg = mensajeInfo(id, agent);
+      if (msg) store.broadcast(msg as never);
+    }
   }
 }
