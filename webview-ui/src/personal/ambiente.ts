@@ -38,7 +38,16 @@ import {
   puntosDePiso,
   puntosDePresentacion,
 } from './lugares.js';
-import { deployDe, dormidoDe, enUso, padreDe, presentandoDe, statusDe, vozDe } from './personal.js';
+import {
+  deployDe,
+  dormidoDe,
+  enUso,
+  padreDe,
+  podarPersonal,
+  presentandoDe,
+  statusDe,
+  vozDe,
+} from './personal.js';
 import { marcoPizarra, setGentePizarra } from './pizarra.js';
 import {
   DURACION_PROYECTO_MS,
@@ -290,8 +299,16 @@ function tickReuniones(os: OfficeState, ahora: number): void {
 
 // ── Paso por cuadro ─────────────────────────────────────────────
 
+/** Cada cuánto se podan los mapas de personajes que ya no están (personal.ts). */
+const PODA_MS = 30_000;
+let ultimaPoda = 0;
+
 export function tickPersonal(os: OfficeState, ahora = Date.now()): void {
   tickReuniones(os, ahora);
+  if (ahora - ultimaPoda > PODA_MS) {
+    ultimaPoda = ahora;
+    podarPersonal((id) => os.characters.has(id), ahora);
+  }
   for (const id of bases.keys()) if (!os.characters.has(id)) bases.delete(id);
   for (const ch of os.characters.values()) {
     if (ch.matrixEffect) continue;

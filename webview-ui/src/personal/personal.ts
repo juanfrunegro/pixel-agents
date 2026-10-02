@@ -98,6 +98,7 @@ export function alMensaje(msg: any): void {
     msg.status = texto;
     if (meta && typeof msg.toolId === 'string') {
       estado.metaPorTool.set(msg.toolId, meta);
+      metaDesde.set(msg.toolId, Date.now());
       avisar();
     }
   }
@@ -111,9 +112,13 @@ export function alMensaje(msg: any): void {
   // Texto de la herramienta en curso de cada personaje (para saber de qué se trata: lugares.ts).
   if (msg?.type === 'agentToolStart' && typeof msg.status === 'string') {
     estado.status.set(msg.id, msg.status);
+    anotarHistorial(msg.id, msg.status);
   } else if (msg?.type === 'subagentToolStart' && typeof msg.status === 'string') {
     for (const [subId, s] of estado.subs) {
-      if (s.padre === msg.id && s.toolId === msg.parentToolId) estado.status.set(subId, msg.status);
+      if (s.padre === msg.id && s.toolId === msg.parentToolId) {
+        estado.status.set(subId, msg.status);
+        anotarHistorial(subId, msg.status);
+      }
     }
   }
   if (msg?.type === 'agentNamesLoaded') {
@@ -140,6 +145,7 @@ export function alMensaje(msg: any): void {
   } else if (msg?.type === 'agentClosed' && typeof msg.id === 'number') {
     // Una sesión cerrada ya no cuenta (por ejemplo, para el cupo de su cuenta).
     estado.info.delete(msg.id);
+    olvidarPersonaje(msg.id);
     avisar();
   } else if (msg?.type === 'agentCreated' || msg?.type === 'existingAgents') {
     const ids: number[] = msg.type === 'agentCreated' ? [msg.id] : (msg.agents ?? []);
@@ -169,6 +175,87 @@ export function registrarSub(
   }
   if (!estado.inicio.has(subId)) estado.inicio.set(subId, Date.now());
   avisar();
+}
+
+// ── Historial reciente de cada personaje (lo muestra la ficha) ──
+
+export interface Paso {
+  t: number;
+  texto: string;
+}
+/** Cuántos pasos se guardan por personaje (los últimos). */
+export const HISTORIAL_MAX = 12;
+const historial = new Map<number, Paso[]>();
+
+export function anotarHistorial(id: number, texto: string, ahora = Date.now()): void {
+  const limpio = texto.trim();
+  if (!limpio) return;
+  const pasos = historial.get(id) ?? [];
+  const ultimo = pasos[pasos.length - 1];
+  if (ultimo && ultimo.texto === limpio) {
+    ultimo.t = ahora; // la misma acción repetida no llena la lista
+  } else {
+    pasos.push({ t: ahora, texto: limpio });
+    if (pasos.length > HISTORIAL_MAX) pasos.splice(0, pasos.length - HISTORIAL_MAX);
+  }
+  historial.set(id, pasos);
+}
+
+/** Últimos pasos, del más nuevo al más viejo. */
+export function historialDe(id: number): Paso[] {
+  return [...(historial.get(id) ?? [])].reverse();
+}
+
+/** Cuándo llegó la meta de cada herramienta (para podar las viejas). */
+const metaDesde = new Map<string, number>();
+/** Una meta sin sub-agente vivo que la use se descarta pasado este tiempo. */
+export const META_VIGENCIA_MS = 30 * 60_000;
+
+/** Ids que faltaban en la poda anterior. */
+let faltabanAntes = new Set<number>();
+
+function olvidarPersonaje(id: number): void {
+  historial.delete(id);
+  estado.subs.delete(id);
+  estado.status.delete(id);
+  estado.actividad.delete(id);
+  estado.inicio.delete(id);
+}
+
+/**
+ * Los mapas por personaje y por herramienta crecían todo el día (cada sub-agente y cada lanzamiento dejaban su
+ * entrada). Se llama cada tanto con los personajes vivos: borra lo de los que ya no están y las metas viejas que
+ * ningún sub-agente usa. No toca `info` de las sesiones (eso lo limpia agentClosed).
+ */
+export function podarPersonal(vivo: (id: number) => boolean, ahora = Date.now()): void {
+  // Un id se borra recién si faltaba también en la poda anterior: al abrir la página los mensajes de una sesión
+  // pueden llegar antes que su personaje.
+  const faltan = new Set<number>();
+  const falta = (id: number) => !vivo(id) && !estado.info.has(id);
+  for (const m of [estado.subs, estado.status, estado.actividad, estado.inicio, historial]) {
+    for (const id of m.keys()) if (falta(id)) faltan.add(id);
+  }
+  for (const id of faltan) if (faltabanAntes.has(id)) olvidarPersonaje(id);
+  faltabanAntes = faltan;
+  const usadas = new Set([...estado.subs.values()].map((s) => s.toolId));
+  for (const [toolId, t] of metaDesde) {
+    if (!usadas.has(toolId) && ahora - t > META_VIGENCIA_MS) {
+      metaDesde.delete(toolId);
+      estado.metaPorTool.delete(toolId);
+    }
+  }
+}
+
+/** Solo para tests. */
+export function _tamanosPersonal(): Record<string, number> {
+  return {
+    subs: estado.subs.size,
+    status: estado.status.size,
+    actividad: estado.actividad.size,
+    inicio: estado.inicio.size,
+    metaPorTool: estado.metaPorTool.size,
+    historial: historial.size,
+  };
 }
 
 function hash(s: string): number {

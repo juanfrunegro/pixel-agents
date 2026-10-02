@@ -1,6 +1,7 @@
 /**
  * Personal (copia de juanfrunegro): ficha del agente seleccionado (clic en un personaje). Muestra nombre de fantasía
- * (editable), nombre interno, proyecto, modelo, esfuerzo, objetivo, estado, tiempo, costo y quién lo lanzó.
+ * (editable), nombre interno, proyecto, modelo, esfuerzo, objetivo, estado, tiempo, costo, quién lo lanzó y sus últimas
+ * acciones (para chusmear qué estuvo haciendo sin abrir la terminal).
  */
 import { useEffect, useState } from 'react';
 
@@ -18,6 +19,7 @@ import {
   esDescartable,
   esWsl,
   etiquetaModelo,
+  historialDe,
   humoDe,
   inicioDe,
   metaDe,
@@ -43,6 +45,18 @@ function duracion(desde: number | undefined): string {
       ? `${Math.floor(s / 60)} min ${s % 60} s`
       : `${Math.floor(s / 3600)} h ${Math.floor((s % 3600) / 60)} min`;
 }
+
+/** "ahora", "hace 40 s", "hace 3 min", "hace 2 h" */
+function hace(t: number): string {
+  const s = Math.max(0, Math.round((Date.now() - t) / 1000));
+  if (s < 5) return 'ahora';
+  if (s < 60) return `hace ${s} s`;
+  if (s < 3600) return `hace ${Math.floor(s / 60)} min`;
+  return `hace ${Math.floor(s / 3600)} h`;
+}
+
+/** Cuántas acciones muestra la ficha. */
+const ACCIONES_EN_FICHA = 6;
 
 function Fila({ etiqueta, children }: { etiqueta: string; children: React.ReactNode }) {
   return (
@@ -78,6 +92,7 @@ export function FichaAgente({ officeState, subagentCharacters }: Props) {
   const costo = costoDe(id);
   const nombre = ch.agentName || nombreDe(id);
   const clave = claveDe(id);
+  const pasos = historialDe(id);
   const interno = ch.agentName ? 'compañero de equipo' : meta ? meta.t : 'sesión principal (CEO)';
   const proyecto = ch.folderName || chPadre?.folderName || '—';
   const vuelve = despiertaA(id);
@@ -183,6 +198,26 @@ export function FichaAgente({ officeState, subagentCharacters }: Props) {
           {nombreDe(padre)}
           {chPadre?.folderName ? ` · ${chPadre.folderName}` : ''}
         </Fila>
+      )}
+      {pasos.length > 0 && (
+        <div className="flex flex-col gap-2" style={{ marginTop: 4 }} data-testid="ficha-historial">
+          <span style={{ fontSize: '18px', opacity: 0.65 }}>Últimas acciones</span>
+          {pasos.slice(0, ACCIONES_EN_FICHA).map((p, i) => (
+            <div
+              key={`${p.t}-${i}`}
+              className="flex gap-6"
+              style={{ fontSize: '16px', lineHeight: 1.1, opacity: i === 0 ? 1 : 0.8 }}
+            >
+              <span style={{ opacity: 0.6, minWidth: 74 }}>{hace(p.t)}</span>
+              <span
+                className="overflow-hidden text-ellipsis whitespace-nowrap"
+                style={{ maxWidth: 270 }}
+              >
+                {p.texto}
+              </span>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );
