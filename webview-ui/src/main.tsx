@@ -1,3 +1,5 @@
+// Personal: primero, para reponer el token en la dirección antes de que el transporte la lea.
+import './personal/tokenGuardado.js';
 import './index.css';
 
 import { StrictMode } from 'react';
