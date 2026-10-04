@@ -2,17 +2,20 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import {
   _reiniciarCarteles,
+  costoJuntoAlNombre,
   globitoJuntoAlNombre,
   renderCarteles,
   salaEn,
   salasDelPlano,
 } from '../src/personal/carteles.js';
 import { CARTEL_WHATSAPP } from '../src/personal/colores.js';
+import { setCostos } from '../src/personal/costos.js';
 import { setWhatsappProyectos } from '../src/personal/pizarra.js';
 
 /** Canvas falso: anota cada fillRect con su color. */
 function lienzo() {
   const rects: Array<{ color: string; x: number; y: number }> = [];
+  const textos: string[] = [];
   const ctx = {
     fillStyle: '',
     globalAlpha: 1,
@@ -22,12 +25,14 @@ function lienzo() {
     save() {},
     restore() {},
     measureText: (t: string) => ({ width: t.length * 10 }),
-    fillText() {},
+    fillText(t: string) {
+      textos.push(t);
+    },
     fillRect(x: number, y: number) {
       rects.push({ color: String(ctx.fillStyle), x, y });
     },
   };
-  return { ctx: ctx as unknown as CanvasRenderingContext2D, rects };
+  return { ctx: ctx as unknown as CanvasRenderingContext2D, rects, textos };
 }
 
 // 6 columnas x 4 filas: pared arriba (fila 0), ERP a la izquierda, pasillo (null) en la columna 3, Brain a la derecha.
@@ -125,6 +130,41 @@ describe('personal: carteles de las salas', () => {
     it('ignora lo que no es una lista de nombres', () => {
       setWhatsappProyectos('ERP');
       expect(verdes()).toHaveLength(0);
+    });
+  });
+
+  describe('costo del día', () => {
+    beforeEach(() => setCostos(null));
+
+    const textos = () => {
+      const l = lienzo();
+      renderCarteles(l.ctx, plano, [], 6, 4, 0, 0, 4, null);
+      return l.textos;
+    };
+
+    it('la oficina que trabajó hoy lleva su costo al lado del nombre; las otras, solo el nombre', () => {
+      setCostos({
+        proyectos: [
+          { proyecto: 'ERP', costo: 12.4 },
+          { proyecto: 'Brain', costo: 0.2 },
+        ],
+      });
+      expect(textos()).toEqual(['ERP', '~$12', 'Brain']);
+    });
+
+    it('sin datos del día, los carteles quedan como siempre', () => {
+      expect(textos()).toEqual(['ERP', 'Brain']);
+    });
+
+    it('con "Mostrar áreas" prendido va a la derecha del nombre y deja lugar para el globito', () => {
+      setCostos({ proyectos: [{ proyecto: 'ERP', costo: 3.44 }] });
+      const l = lienzo();
+      const fin = costoJuntoAlNombre(l.ctx, 'ERP', 200, 50, 18);
+      expect(l.textos).toEqual(['~$3.4', '~$3.4']); // sombra y texto
+      expect(fin).toBeGreaterThan(200);
+      const otra = lienzo();
+      expect(costoJuntoAlNombre(otra.ctx, 'Brain', 200, 50, 18)).toBe(200);
+      expect(otra.textos).toEqual([]);
     });
   });
 });

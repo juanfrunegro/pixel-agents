@@ -9,6 +9,7 @@ import { esOficinaLibre } from '../../../core/src/salasComunes.js';
 import { isBrowserRuntime } from '../runtime.js';
 import { transport } from '../transport/index.js';
 import { COLOR_AVISO, COLOR_SALA_SIN_COLOR, COLOR_VELO } from './colores.js';
+import { cargarCostos } from './costos.js';
 import { nombreDe, usePersonal } from './personal.js';
 import {
   cargarPizarra,
@@ -40,8 +41,12 @@ export function PanelesPersonales({
 
   useEffect(() => {
     if (!isBrowserRuntime) return;
-    void cargarPizarra();
-    const t = setInterval(() => void cargarPizarra(), REFRESCO_MS);
+    const cargar = () => {
+      void cargarPizarra();
+      void cargarCostos(); // costo del día en el cartel de cada oficina
+    };
+    cargar();
+    const t = setInterval(cargar, REFRESCO_MS);
     return () => clearInterval(t);
   }, []);
 

@@ -46,7 +46,11 @@ import {
   VOID_TILE_OUTLINE_COLOR,
 } from '../../constants.js';
 import { renderBurbujasPersonales } from '../../personal/burbujas.js';
-import { globitoJuntoAlNombre, renderCarteles } from '../../personal/carteles.js';
+import {
+  costoJuntoAlNombre,
+  globitoJuntoAlNombre,
+  renderCarteles,
+} from '../../personal/carteles.js';
 import { personajesContratistas, renderCartelesContratistas } from '../../personal/contratistas.js';
 import { renderEscenario, renderMicrofonoCentral } from '../../personal/escenario.js';
 import { ALFA_APAGADO, apagadoPorFiltro } from '../../personal/filtro.js';
@@ -311,8 +315,15 @@ export function renderAreaLabels(
     ctx.globalAlpha = AREA_LABEL_ALPHA * tenue;
     ctx.fillStyle = colorMap.get(label) ?? AREA_LABEL_FALLBACK_COLOR;
     ctx.fillText(texto, cx, cy);
-    // personal: aviso por WhatsApp de ese proyecto (menú de la oficina)
-    globitoJuntoAlNombre(ctx, label, cx + ctx.measureText(texto).width / 2, cy, fontSize);
+    // personal: costo del día de esa oficina y aviso por WhatsApp de ese proyecto (menú de la oficina)
+    const derecha = costoJuntoAlNombre(
+      ctx,
+      label,
+      cx + ctx.measureText(texto).width / 2,
+      cy,
+      fontSize,
+    );
+    globitoJuntoAlNombre(ctx, label, derecha, cy, fontSize);
   }
   ctx.restore();
 }

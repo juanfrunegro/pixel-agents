@@ -4,10 +4,10 @@
  * sala, la sala se aclara un poco y su cartel se resalta. En el pasillo no va nada: taparía a los que caminan.
  * Con "Mostrar áreas" prendido no se dibuja (ya están los nombres del original).
  * Si el proyecto tiene prendido "Avisame por WhatsApp cuando termine" (menú de la oficina), el cartel lleva un globito
- * verde a la derecha del nombre.
+ * verde a la derecha del nombre. Las oficinas que trabajaron hoy llevan, chico y tenue, su costo del día (costos.ts).
  */
 import { esOficinaLibre } from '../../../core/src/salasComunes.js';
-import { TILE_SIZE } from '../constants.js';
+import { AREA_LABEL_SHADOW_COLOR, TILE_SIZE } from '../constants.js';
 import {
   CARTEL_BORDE,
   CARTEL_FONDO,
@@ -16,6 +16,7 @@ import {
   CARTEL_WHATSAPP,
   SALA_ACLARADO,
 } from './colores.js';
+import { costoDe, textoCosto } from './costos.js';
 import { whatsappProyecto } from './pizarra.js';
 
 interface Sala {
@@ -92,6 +93,37 @@ export function globitoJuntoAlNombre(
   dibujarGlobito(ctx, Math.round(derechaDelTexto + 2 * u), Math.round(cy - 3.5 * u), u);
 }
 
+/**
+ * El costo del día al lado de un nombre de sala con "Mostrar áreas" prendido: chico y tenue, a la derecha del texto.
+ * Devuelve dónde termina, para que el globito de WhatsApp vaya después.
+ */
+export function costoJuntoAlNombre(
+  ctx: CanvasRenderingContext2D,
+  label: string,
+  derechaDelTexto: number,
+  cy: number,
+  fuente: number,
+): number {
+  const costo = esOficinaLibre(label) ? null : textoCosto(costoDe(label));
+  if (!costo) return derechaDelTexto;
+  const { font, textAlign, globalAlpha } = ctx;
+  const u = Math.max(1, Math.round(fuente / 9));
+  ctx.font = `${Math.round(fuente * 0.7)}px 'FS Pixel Sans'`;
+  ctx.textAlign = 'left';
+  const x = Math.round(derechaDelTexto + 3 * u);
+  ctx.globalAlpha = 0.45;
+  ctx.fillStyle = AREA_LABEL_SHADOW_COLOR;
+  ctx.fillText(costo, x + 1, cy + 1);
+  ctx.globalAlpha = 0.8;
+  ctx.fillStyle = CARTEL_TEXTO;
+  ctx.fillText(costo, x, cy);
+  const fin = x + ctx.measureText(costo).width;
+  ctx.font = font;
+  ctx.textAlign = textAlign;
+  ctx.globalAlpha = globalAlpha;
+  return fin;
+}
+
 function dibujarGlobito(ctx: CanvasRenderingContext2D, x: number, y: number, u: number): void {
   GLOBITO.forEach((fila, r) => {
     for (let c = 0; c < fila.length; c++) {
@@ -144,11 +176,17 @@ export function renderCarteles(
     const resaltado = sala.label === encima;
     const wpp = !libre && whatsappProyecto(sala.label);
     const u = Math.max(1, Math.round(fuente / 9));
-    const extra = wpp ? 9 * u : 0; // globito (7) y su espacio (2)
-    const ancho = Math.min(
-      ctx.measureText(texto).width + fuente + extra,
-      (sala.maxCol - sala.minCol + 1) * s,
-    );
+    const costo = libre ? null : textoCosto(costoDe(sala.label));
+    const fuenteCosto = Math.round(fuente * 0.75);
+    let anchoCosto = 0;
+    if (costo) {
+      ctx.font = `${fuenteCosto}px 'FS Pixel Sans'`;
+      anchoCosto = ctx.measureText(costo).width + 3 * u; // con su espacio después del nombre
+      ctx.font = `${fuente}px 'FS Pixel Sans'`;
+    }
+    const extra = anchoCosto + (wpp ? 9 * u : 0); // globito (7) y su espacio (2)
+    const anchoTexto = ctx.measureText(texto).width;
+    const ancho = Math.min(anchoTexto + fuente + extra, (sala.maxCol - sala.minCol + 1) * s);
     const alto = Math.round(fuente * 1.5);
     const cx = Math.round(offsetX + ((sala.minCol + sala.maxCol + 1) / 2) * s);
     // Placa centrada en la pared de arriba de la sala, pegada al piso (no tapa lo que hay arriba en la pared).
@@ -166,6 +204,14 @@ export function renderCarteles(
     ctx.fillRect(x + ancho - borde, y, borde, alto);
     ctx.fillStyle = resaltado ? CARTEL_TEXTO_RESALTADO : CARTEL_TEXTO;
     ctx.fillText(texto, cx - extra / 2, cy + borde / 2, ancho - fuente / 2 - extra);
+    if (costo) {
+      ctx.font = `${fuenteCosto}px 'FS Pixel Sans'`;
+      ctx.textAlign = 'left';
+      ctx.globalAlpha *= 0.7;
+      ctx.fillText(costo, cx - extra / 2 + anchoTexto / 2 + 3 * u, cy + borde / 2);
+      ctx.font = `${fuente}px 'FS Pixel Sans'`;
+      ctx.textAlign = 'center';
+    }
     if (wpp) {
       ctx.globalAlpha = 1; // el aviso se ve siempre, aunque el cartel esté tenue
       dibujarGlobito(ctx, Math.round(x + ancho - fuente / 2 - 7 * u), Math.round(cy - 3.5 * u), u);
