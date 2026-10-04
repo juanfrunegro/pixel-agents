@@ -18,6 +18,7 @@ import {
   COLOR_PIZARRA_GENTE,
   COLOR_PIZARRA_TEXTO,
 } from './colores.js';
+import { clicInforme } from './informes.js';
 
 export interface FilaPizarra {
   sala: string;
@@ -324,6 +325,7 @@ export function clicPersonal(
     abrirPizarra();
     return true;
   }
+  if (clicInforme(tile.col, tile.row)) return true; // escritorio de un manager o del CEO: su informe
   if (enComunicaciones(plano.areaTiles, plano.cols, tile.col, tile.row)) {
     abrirComunicaciones();
     return true;

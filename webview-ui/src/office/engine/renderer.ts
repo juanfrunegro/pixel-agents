@@ -54,6 +54,7 @@ import {
 import { personajesContratistas, renderCartelesContratistas } from '../../personal/contratistas.js';
 import { renderEscenario, renderMicrofonoCentral } from '../../personal/escenario.js';
 import { ALFA_APAGADO, apagadoPorFiltro } from '../../personal/filtro.js';
+import { parpadea } from '../../personal/informes.js';
 import { renderLuces, renderNoche } from '../../personal/luces.js';
 import { colorModelo, hayPresentacion, modeloDe } from '../../personal/personal.js';
 import { renderPizarra } from '../../personal/pizarra.js';
@@ -1090,7 +1091,8 @@ export function renderFrame(
       offsetY,
       zoom,
       (sala) => areas?.find((a) => a.label === sala)?.color,
-    ); // personal: CEO y managers
+      parpadea,
+    ); // personal: CEO y managers, con el semáforo de los informes
   if (!editor) renderCartelesContratistas(ctx, offsetX, offsetY, zoom); // personal: quién es cada contratista
   renderPizarra(ctx, areas, offsetX, offsetY, zoom); // personal: pendientes en la pizarra del Brain
   if (!editor) renderNoche(ctx, areaTiles, cols, rows, offsetX, offsetY, zoom); // personal: luz según la hora

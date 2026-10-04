@@ -48,6 +48,8 @@ export const CARTEL_WHATSAPP = '#25d366';
 export const SALA_ACLARADO = '#ffffff';
 /** Placa del escritorio del CEO (placas.ts): filete dorado. */
 export const PLACA_CEO = '#e8c547';
+/** Semáforo: la placa que espera una decisión del CEO titila con este marco. */
+export const PLACA_ALERTA = '#e5484d';
 /** Cabina de Contratistas (contratistas.ts): filete del cartel según el estado que da Orca. */
 export const CONTRATISTA_TRABAJA = '#4cb36a';
 export const CONTRATISTA_ESPERA = '#e8a33a';

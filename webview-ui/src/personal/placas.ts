@@ -8,7 +8,7 @@
 import { personaDe } from '../../../core/src/aspectoPersonal.js';
 import type { PlacedFurniture } from '../office/types.js';
 import { TILE_SIZE } from '../office/types.js';
-import { CARTEL_BORDE, CARTEL_FONDO, CARTEL_TEXTO, PLACA_CEO } from './colores.js';
+import { CARTEL_BORDE, CARTEL_FONDO, CARTEL_TEXTO, PLACA_ALERTA, PLACA_CEO } from './colores.js';
 import { nombres } from './personal.js';
 
 export interface Placa {
@@ -68,9 +68,12 @@ export function textoPlaca(p: Placa): { texto: string; conDueno: boolean } {
     : { texto: 'Manager', conDueno: false };
 }
 
+/** Medio ciclo del parpadeo del semáforo (ms). */
+export const PARPADEO_MS = 500;
+
 /**
  * `colorDe` da el color de la sala (el del cartel de la pared): es el filete de arriba de la placa del manager; la del
- * CEO va en dorado.
+ * CEO va en dorado. `parpadea` (semáforo, informes.ts): la placa titila en rojo mientras espera una decisión del CEO.
  */
 export function renderPlacas(
   ctx: CanvasRenderingContext2D,
@@ -78,6 +81,8 @@ export function renderPlacas(
   offsetY: number,
   zoom: number,
   colorDe: (sala: string | null) => string | undefined = () => undefined,
+  parpadea: (p: Placa) => boolean = () => false,
+  ahora = performance.now(),
 ): void {
   if (placas.length === 0) return;
   const s = TILE_SIZE * zoom;
@@ -87,6 +92,7 @@ export function renderPlacas(
   ctx.font = `${fuente}px 'FS Pixel Sans'`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
+  const prendida = Math.floor(ahora / PARPADEO_MS) % 2 === 0;
   for (const p of placas) {
     const { texto, conDueno } = textoPlaca(p);
     const ancho = Math.round(Math.max(ctx.measureText(texto).width + fuente, s * 1.2));
@@ -104,8 +110,23 @@ export function renderPlacas(
     ctx.fillRect(x, y, ancho, borde * 2);
     ctx.fillStyle = CARTEL_TEXTO;
     ctx.fillText(texto, cx, y + alto / 2 + borde / 2);
+    if (prendida && parpadea(p)) {
+      // Semáforo: marco rojo alrededor de la placa, a pleno aunque la placa esté tenue.
+      const m = borde * 2;
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = PLACA_ALERTA;
+      ctx.fillRect(x - m, y - m, ancho + 2 * m, m);
+      ctx.fillRect(x - m, y + alto, ancho + 2 * m, m);
+      ctx.fillRect(x - m, y, m, alto);
+      ctx.fillRect(x + ancho, y, m, alto);
+    }
   }
   ctx.restore();
+}
+
+/** Las placas del último plano (para el clic en el escritorio, informes.ts). */
+export function placasDelPlano(): readonly Placa[] {
+  return placas;
 }
 
 /** Solo para tests. */

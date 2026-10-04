@@ -20,6 +20,7 @@ import {
   WS_CLOSE_UNAUTHORIZED,
 } from './constants.js';
 import { registrarHoy } from './personal/hoy.js';
+import { registrarInformes } from './personal/informes.js';
 import { registrarOrganigrama } from './personal/organigrama.js';
 import { cupoPorCuenta } from './personal/personal.js';
 import { pizarra } from './personal/pizarra.js';
@@ -94,6 +95,7 @@ export async function createHttpServer(options: HttpServerOptions): Promise<Http
   registrarHoy(app, options.token, pizarra, () =>
     cupoPorCuenta([...options.store].map(([, a]) => a)),
   );
+  registrarInformes(app, options.token); // personal: último informe de cada manager (placas y semáforo del CEO)
   registerHookRoute(app, options);
   registerWebSocketRoute(app, options);
 

@@ -10,6 +10,8 @@ import { isBrowserRuntime } from '../runtime.js';
 import { transport } from '../transport/index.js';
 import { COLOR_AVISO, COLOR_SALA_SIN_COLOR, COLOR_VELO } from './colores.js';
 import { cargarCostos } from './costos.js';
+import { cargarInformes } from './informes.js';
+import { PanelInforme } from './PanelInforme.js';
 import { nombreDe, usePersonal } from './personal.js';
 import {
   cargarPizarra,
@@ -44,6 +46,7 @@ export function PanelesPersonales({
     const cargar = () => {
       void cargarPizarra();
       void cargarCostos(); // costo del día en el cartel de cada oficina
+      void cargarInformes(); // último informe de cada manager (placas y semáforo del CEO)
     };
     cargar();
     const t = setInterval(cargar, REFRESCO_MS);
@@ -111,6 +114,7 @@ export function PanelesPersonales({
 
   return (
     <>
+      <PanelInforme />
       {p.menu && (
         <>
           <div
