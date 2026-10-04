@@ -34,6 +34,7 @@ import { isWalkable } from '../office/layout/tileMap.js';
 import type { Character, Seat } from '../office/types.js';
 import { CharacterState, Direction } from '../office/types.js';
 import { conversar, turnosDe } from './burbujas.js';
+import { setSillasContratistas } from './contratistas.js';
 import { calcularLuces, type EstadoLuz, setLuces, setSalasPrendidas } from './luces.js';
 import {
   actividadDe,
@@ -562,6 +563,7 @@ export function gentePorProyecto(os: OfficeState, ahora: number): Map<string, nu
 function tickLuces(os: OfficeState, ahora: number): void {
   const layout = os.getLayout();
   setPlacas(layout.furniture, (col, row) => layout.areaTiles?.[row * layout.cols + col] ?? null);
+  setSillasContratistas(os.seats);
   setSalasPrendidas(salasConGente(os, ahora));
   marcoPizarra(os.getLayout().furniture, (tipo) => {
     const e = getCatalogEntry(tipo);

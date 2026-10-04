@@ -125,6 +125,7 @@ export function mensajeNombres(n: Nombres = leerNombres()): Record<string, unkno
     agentes: n.agentes,
     descartables: n.descartables,
     orden: ordenPersonas(n),
+    externos: n.externos ?? {}, // Codex, Pi, Antigravity: la cabina de Contratistas
   };
 }
 

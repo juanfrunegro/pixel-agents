@@ -13,6 +13,7 @@ export interface Nombres {
   agentes: Record<string, string>;
   descartables: string[];
   orden?: string[]; // personas del organigrama, en orden: fija el personaje de cada una
+  externos?: Record<string, string>; // otros motores (pi, codex, antigravity): la cabina de Contratistas
 }
 
 export interface MetaSub {
@@ -156,6 +157,7 @@ export function alMensaje(msg: any): void {
       agentes: msg.agentes ?? {},
       descartables: msg.descartables ?? [],
       orden: Array.isArray(msg.orden) ? msg.orden : [],
+      externos: msg.externos && typeof msg.externos === 'object' ? msg.externos : {},
     };
     avisar();
   } else if (msg?.type === 'agentInfo') {

@@ -46,6 +46,9 @@ export const CARTEL_BORDE = '#3a3a55';
 export const SALA_ACLARADO = '#ffffff';
 /** Placa del escritorio del CEO (placas.ts): filete dorado. */
 export const PLACA_CEO = '#e8c547';
+/** Cabina de Contratistas (contratistas.ts): filete del cartel según el estado que da Orca. */
+export const CONTRATISTA_TRABAJA = '#4cb36a';
+export const CONTRATISTA_ESPERA = '#e8a33a';
 
 /** Escenario de Presentaciones (escenario.ts): tarima de madera y micrófonos. */
 export const ESCENARIO_MADERA = '#8a5a34';

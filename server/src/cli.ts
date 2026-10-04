@@ -28,6 +28,7 @@ import {
 import { MAX_PORT, MIN_PORT } from './constants.js';
 import { FileStateAdapter } from './fileStateAdapter.js';
 import { setFolderNameResolver } from './fileWatcher.js';
+import { actualizarContratistas, CONSULTA_MS } from './personal/contratistas.js';
 import { cargarReglasOrca } from './personal/oficina.js';
 import { proyectoDe, revisarSenales } from './personal/personal.js';
 import { limpiarVozVieja } from './personal/senales.js';
@@ -160,6 +161,16 @@ async function main(): Promise<void> {
         console.error('[Pixel Agents] revisarSenales:', err);
       }
     }, 2000).unref();
+    // personal: Codex, Pi y Antigravity (no son sesiones de Claude) para la cabina de Contratistas, desde Orca.
+    const contratistas = () => {
+      try {
+        actualizarContratistas((m) => store.broadcast(m));
+      } catch (err) {
+        console.error('[Pixel Agents] contratistas:', err);
+      }
+    };
+    contratistas();
+    setInterval(contratistas, CONSULTA_MS).unref();
     limpiarVozVieja(); // personal: interruptores de voz de sesiones de hace días
     cargarSkins(distRoot); // personal: skins de Marvel (solo estética)
 

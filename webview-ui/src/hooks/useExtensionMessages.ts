@@ -21,6 +21,7 @@ import type { OfficeLayout, ToolActivity } from '../office/types.js';
 import { setWallSprites } from '../office/wallTiles.js';
 import { alLanzarSub, alTerminarSub } from '../personal/burbujas.js';
 import { setConfigVoz } from '../personal/configVoz.js';
+import { alMensajeContratistas } from '../personal/contratistas.js';
 import { alMensaje, registrarSub } from '../personal/personal.js';
 import { setOficinas } from '../personal/pizarra.js';
 import { setSkins } from '../personal/skins.js';
@@ -191,6 +192,7 @@ export function useExtensionMessages(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const handler = (msg: any) => {
       alMensaje(msg); // personal: nombres, modelo/costo y meta del sub-agente (limpia el status)
+      alMensajeContratistas(msg); // personal: la cabina de Contratistas (Orca)
       const os = getOfficeState();
       // CI / e2e diagnostic: record every received transport message on the
       // window-side log. The fixture reads window.__pixelAgentsTestHooks.

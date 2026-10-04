@@ -47,6 +47,7 @@ import {
 } from '../../constants.js';
 import { renderBurbujasPersonales } from '../../personal/burbujas.js';
 import { renderCarteles } from '../../personal/carteles.js';
+import { personajesContratistas, renderCartelesContratistas } from '../../personal/contratistas.js';
 import { renderEscenario, renderMicrofonoCentral } from '../../personal/escenario.js';
 import { ALFA_APAGADO, apagadoPorFiltro } from '../../personal/filtro.js';
 import { renderLuces, renderNoche } from '../../personal/luces.js';
@@ -1058,7 +1059,7 @@ export function renderFrame(
   renderScene(
     ctx,
     allFurniture,
-    characters,
+    editor ? characters : [...characters, ...personajesContratistas()], // personal: la cabina de Contratistas
     offsetX,
     offsetY,
     zoom,
@@ -1076,6 +1077,7 @@ export function renderFrame(
       zoom,
       (sala) => areas?.find((a) => a.label === sala)?.color,
     ); // personal: CEO y managers
+  if (!editor) renderCartelesContratistas(ctx, offsetX, offsetY, zoom); // personal: quién es cada contratista
   renderPizarra(ctx, areas, offsetX, offsetY, zoom); // personal: pendientes en la pizarra del Brain
   if (!editor) renderNoche(ctx, areaTiles, cols, rows, offsetX, offsetY, zoom); // personal: luz según la hora
   renderLuces(ctx, areaTiles, cols, offsetX, offsetY, zoom); // personal: deploy y Presentaciones

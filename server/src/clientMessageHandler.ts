@@ -15,6 +15,7 @@ import { HUE_SHIFT_MAX_DEG, PALETTE_COUNT } from './constants.js';
 import { readLayoutFromFile, writeLayoutToFile } from './layoutPersistence.js';
 import { abrirProyecto } from './personal/abrir.js';
 import { escribirApagado, leerApagado } from './personal/apagado.js';
+import { mensajeContratistas } from './personal/contratistas.js';
 import { asignarOficina } from './personal/ocupacion.js';
 import {
   candidatoDeRuta,
@@ -547,6 +548,7 @@ function handleWebviewReady(send: WsSend, ctx: ClientMessageContext): void {
     }
     const skins = mensajeSkins(); // personal: skins de Marvel
     if (skins) send(skins as never);
+    send(mensajeContratistas() as never); // personal: la cabina de Contratistas (lo último que dijo Orca)
     if (cache.pets) {
       send({
         type: 'petSpritesLoaded',
