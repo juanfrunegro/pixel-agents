@@ -10,8 +10,13 @@ import {
   ESCENARIO_BORDE,
   ESCENARIO_BRILLO,
   ESCENARIO_MADERA,
+  MIC_BRILLO,
   MIC_CABEZA,
+  MIC_CANO,
+  MIC_MANGO,
   MIC_PIE,
+  MIC_REJILLA,
+  MIC_SOMBRA,
 } from './colores.js';
 
 /** Medio ancho de la tarima en tiles (a cada lado del centro) y su alto. */
@@ -44,19 +49,42 @@ export function escenarioDe(
   };
 }
 
+/** Alto del caño del micrófono, en píxeles del dibujo (a zoom 1). */
+const CANO = 5;
+
+/**
+ * Micrófono de pie en pixel art. `cx` es el centro exacto (el borde entre las dos columnas del medio: todo el dibujo
+ * tiene ancho par para quedar centrado) y `yPiso` la línea donde apoya. Las coordenadas son píxeles del dibujo
+ * (cada uno mide `zoom`), con x relativo al centro e y hacia arriba desde el piso.
+ */
 function pieDeMicrofono(
   ctx: CanvasRenderingContext2D,
-  x: number,
+  cx: number,
   yPiso: number,
   zoom: number,
-  alto: number,
 ): void {
   const g = Math.max(1, Math.round(zoom));
-  ctx.fillStyle = MIC_PIE;
-  ctx.fillRect(x - 2 * g, yPiso - g, 5 * g, g); // base
-  ctx.fillRect(x, yPiso - alto, g, alto); // caño
-  ctx.fillStyle = MIC_CABEZA;
-  ctx.fillRect(x - g, yPiso - alto - 2 * g, 3 * g, 3 * g); // cabeza
+  const px = (x: number, y: number, w: number, h: number, color: string): void => {
+    ctx.fillStyle = color;
+    ctx.fillRect(cx + x * g, yPiso - (y + h) * g, w * g, h * g);
+  };
+  px(-4, 0, 8, 1, MIC_SOMBRA); // sombra sobre la tarima
+  // Trípode: dos patas en diagonal hasta el cubo.
+  px(-4, 0, 1, 1, MIC_PIE);
+  px(3, 0, 1, 1, MIC_PIE);
+  px(-3, 1, 1, 1, MIC_PIE);
+  px(2, 1, 1, 1, MIC_PIE);
+  px(-2, 2, 4, 1, MIC_PIE);
+  // Caño: dos columnas, una con luz, para que se lea redondo.
+  px(-1, 3, 1, CANO, MIC_PIE);
+  px(0, 3, 1, CANO, MIC_CANO);
+  const y = 3 + CANO;
+  px(-2, y, 4, 1, MIC_PIE); // pinza
+  px(-1, y + 1, 2, 2, MIC_MANGO); // mango
+  px(-2, y + 3, 4, 1, MIC_REJILLA); // aro
+  px(-2, y + 4, 4, 2, MIC_CABEZA); // cabeza
+  px(-1, y + 6, 2, 1, MIC_CABEZA); // tope redondeado
+  px(-1, y + 5, 1, 2, MIC_BRILLO); // reflejo
 }
 
 /** La tarima: debajo de los personajes. */
@@ -108,10 +136,9 @@ export function renderMicrofonoCentral(
   ctx.save();
   pieDeMicrofono(
     ctx,
-    Math.round(offsetX + (e.col + 0.5) * s + s * 0.3),
+    Math.round(offsetX + (e.col + 0.5) * s),
     Math.round(offsetY + (e.row + 1) * s - s / 4),
     zoom,
-    Math.round(s * 0.75),
   );
   ctx.restore();
 }
