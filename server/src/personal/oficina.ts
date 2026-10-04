@@ -417,11 +417,40 @@ interface MuebleRelativo {
   dy: number;
 }
 
+/** Color de alfombra del motor (CarpetTile.color / accentColor): tono, saturación, brillo y contraste. */
+interface ColorAlfombra {
+  h: number;
+  s: number;
+  b: number;
+  c: number;
+  colorize: true;
+}
+
+/** Alfombra rectangular relativa al piso de la sala (se camina por encima; el motor dibuja los bordes). */
+interface Alfombra {
+  dx: number;
+  dy: number;
+  w: number;
+  h: number;
+  variant: number;
+  color: ColorAlfombra;
+  accentColor: ColorAlfombra;
+}
+
 interface Contenido {
   muebles: MuebleRelativo[];
   /** Columnas (dx) de la pared de arriba que son puerta al pasillo. */
   puertas: number[];
+  alfombras?: Alfombra[];
 }
+
+const tono = (h: number, s: number, b: number, c = 0): ColorAlfombra => ({
+  h,
+  s,
+  b,
+  c,
+  colorize: true,
+});
 
 const PARED_ARRIBA = -2;
 
@@ -499,16 +528,36 @@ function brain(): Contenido {
   return { muebles: m, puertas: [1, 15] };
 }
 
-/** Diseño: dos filas de atriles. */
+/**
+ * Diseño: un estudio. Dos grupos de tres atriles (arriba a la izquierda y abajo a la derecha) alrededor de una alfombra
+ * de color con la mesa de luz y sus muestras; plantas, un cuadro y un mural en la pared (el medio queda para el nombre).
+ * La fila de abajo queda libre: se entra desde el pasillo.
+ */
 function diseno(): Contenido {
   const m: MuebleRelativo[] = [];
-  for (const dy of [0, 3]) {
-    for (const dx of [1, 3, 5, 7]) m.push({ id: `atril-${dy}-${dx}`, type: 'EASEL', dx, dy });
-  }
+  for (const dx of [0, 1, 2]) m.push({ id: `atril-0-${dx}`, type: 'EASEL', dx, dy: 0 });
+  for (const dx of [6, 7, 8]) m.push({ id: `atril-3-${dx}`, type: 'EASEL', dx, dy: 3 });
+  m.push({ id: 'mesa-luz', type: 'MESA_LUZ', dx: 4, dy: 1 });
+  m.push({ id: 'planta', type: 'PLANT', dx: 8, dy: 0 });
+  m.push({ id: 'cactus', type: 'CACTUS', dx: 0, dy: 4 });
   m.push({ id: 'cuadro-grande', type: 'LARGE_PAINTING', dx: 0, dy: PARED_ARRIBA });
-  m.push({ id: 'cuadro', type: 'SMALL_PAINTING', dx: 7, dy: PARED_ARRIBA });
-  m.push({ id: 'planta-colgante', type: 'HANGING_PLANT', dx: 8, dy: PARED_ARRIBA });
-  return { muebles: m, puertas: [0, 4] };
+  m.push({ id: 'planta-colgante', type: 'HANGING_PLANT', dx: 2, dy: PARED_ARRIBA });
+  m.push({ id: 'mural', type: 'MURAL', dx: 6, dy: PARED_ARRIBA });
+  return {
+    muebles: m,
+    puertas: [0, 4],
+    alfombras: [
+      {
+        dx: 3,
+        dy: 0,
+        w: 4,
+        h: 5,
+        variant: 0,
+        color: tono(300, 45, -25),
+        accentColor: tono(45, 70, 10),
+      },
+    ],
+  };
 }
 
 /**
@@ -699,6 +748,9 @@ export function generarLayout(
   const t: number[] = new Array(cols * rows).fill(VACIO);
   const tc: unknown[] = new Array(cols * rows).fill(null);
   const area: Array<string | null> = new Array(cols * rows).fill(null);
+  const alfombra: Array<Omit<Alfombra, 'dx' | 'dy' | 'w' | 'h'> | null> = new Array(
+    cols * rows,
+  ).fill(null);
   const furniture: Mueble[] = [];
   const poner = (
     c: number,
@@ -722,7 +774,7 @@ export function generarLayout(
     }
     let x = Math.floor((cols - anchoDe(franja)) / 2);
     for (const p of franja) {
-      const { muebles, puertas } = contenido(p);
+      const { muebles, puertas, alfombras = [] } = contenido(p);
       const piso = pisoDe(p.tipo);
       for (let c = x; c < x + p.ancho; c++) poner(c, filaPared, pared);
       for (let r = filaPared + 1; r <= filaPared + INTERIOR; r++) {
@@ -731,6 +783,11 @@ export function generarLayout(
       }
       // Puertas desde el pasillo de arriba (la primera franja no tiene pasillo arriba: se entra por abajo).
       if (b > 0) for (const dx of puertas) poner(x + 1 + dx, filaPared, piso);
+      for (const { dx, dy, w, h, ...a } of alfombras) {
+        for (let r = dy; r < dy + h; r++) {
+          for (let c = dx; c < dx + w; c++) alfombra[(filaPared + 1 + r) * cols + x + 1 + c] = a;
+        }
+      }
       const sufijo = slug(p.sala.nombre);
       for (const f of muebles) {
         furniture.push({
@@ -755,6 +812,7 @@ export function generarLayout(
     tiles: t,
     tileColors: tc,
     furniture,
+    ...(alfombra.some(Boolean) ? { carpetTiles: alfombra } : {}),
     areas: enPlano.map((s) => ({ label: s.nombre, color: s.color })),
     areaTiles: area,
   };
