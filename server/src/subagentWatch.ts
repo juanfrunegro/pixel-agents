@@ -17,7 +17,8 @@
  * uses for the Subtask sub-character. No protocol change.
  */
 
-import type * as fs from 'fs';
+import * as fs from 'fs';
+import * as path from 'path';
 
 import { AgentStateStore } from './agentStateStore.js';
 import { DEFAULT_MAX_CONTEXT_TOKENS } from './constants.js';
@@ -31,6 +32,10 @@ import type { AgentState } from './types.js';
  *  with shadow ids too; the offset guarantees they miss the main store and
  *  no-op instead of touching an unrelated real agent. */
 const SHADOW_ID_BASE = 1_000_000;
+
+/** personal: cuánto se sigue buscando el sidecar de un agente anidado antes de rendirse. */
+const ANIDADO_ESPERA_MS = 60_000;
+const ANIDADO_POLL_MS = 1_000;
 
 /** A sub-agent transcript adoption request (sidecar-backed, unnamed). */
 export interface SubagentWatchEntry {
@@ -48,7 +53,19 @@ export class SubagentWatch {
   /** Shadow id → the (lead, spawn tool) the webview keys the sub-character on.
    *  Kept here (not read off AgentState) so transcript-parser mutations of the
    *  shadow agent's team fields can never break the translation. */
-  private readonly subKeys = new Map<number, { leadId: number; spawnToolUseId: string }>();
+  private readonly subKeys = new Map<
+    number,
+    {
+      leadId: number;
+      spawnToolUseId: string;
+      /** personal: si lo lanzó otro sub-agente (un manager), su spawn y su id en la sombra. */
+      jefeToolId?: string;
+      jefeShadowId?: number;
+    }
+  >();
+  /** personal: agentes que lanzó un sub-agente y cuyo sidecar todavía no apareció (toolUseId → quién lo lanzó). */
+  private readonly anidadosPendientes = new Map<string, { jefeShadowId: number; desde: number }>();
+  private pollAnidados: ReturnType<typeof setInterval> | null = null;
   /** Shadow id → tool ids started but not yet done (for toolsClear synthesis). */
   private readonly liveToolIds = new Map<number, Set<string>>();
 
@@ -66,7 +83,12 @@ export class SubagentWatch {
   }
 
   /** Start watching an unnamed background spawn's transcript for the given lead. */
-  watch(lead: AgentState, leadId: number, entry: SubagentWatchEntry): void {
+  watch(
+    lead: AgentState,
+    leadId: number,
+    entry: SubagentWatchEntry,
+    jefe?: { toolId: string; shadowId: number },
+  ): void {
     const id = this.store.nextAgentId.current++;
     const agent: AgentState = {
       id,
@@ -98,7 +120,12 @@ export class SubagentWatch {
       spawnToolUseId: entry.toolUseId,
     };
 
-    this.subKeys.set(id, { leadId, spawnToolUseId: entry.toolUseId });
+    this.subKeys.set(id, {
+      leadId,
+      spawnToolUseId: entry.toolUseId,
+      jefeToolId: jefe?.toolId,
+      jefeShadowId: jefe?.shadowId,
+    });
     this.store.set(id, agent);
 
     console.log(
@@ -119,6 +146,17 @@ export class SubagentWatch {
 
   /** Stop the watch matching a completed spawn (queue-operation on the lead). */
   removeBySpawn(leadId: number, toolUseId: string): void {
+    // personal: el "lead" es un sub-agente de la sombra (un manager): terminó uno de sus agentes anidados.
+    if (leadId >= SHADOW_ID_BASE) {
+      this.anidadosPendientes.delete(toolUseId);
+      for (const [id, key] of this.subKeys) {
+        if (key.jefeShadowId === leadId && key.spawnToolUseId === toolUseId) {
+          this.remove(id);
+          return;
+        }
+      }
+      return;
+    }
     for (const [id, key] of this.subKeys) {
       if (key.leadId === leadId && key.spawnToolUseId === toolUseId) {
         this.remove(id);
@@ -140,6 +178,59 @@ export class SubagentWatch {
     for (const id of [...this.subKeys.keys()]) {
       this.remove(id);
     }
+    this.anidadosPendientes.clear();
+    this.pararPollAnidados();
+  }
+
+  /**
+   * personal: busca los sidecars de los agentes que lanzaron los sub-agentes vigilados (un manager que delega). Están
+   * en la misma carpeta `subagents/` que el transcript del manager, con su `toolUseId`. Lo llama un intervalo mientras
+   * haya pendientes; público para los tests.
+   */
+  buscarAnidados(ahora = Date.now()): void {
+    for (const [toolId, p] of [...this.anidadosPendientes]) {
+      const jefe = this.store.get(p.jefeShadowId);
+      const jefeKey = this.subKeys.get(p.jefeShadowId);
+      if (!jefe || !jefeKey || ahora - p.desde > ANIDADO_ESPERA_MS) {
+        this.anidadosPendientes.delete(toolId);
+        continue;
+      }
+      const lead = this.mainStore.get(jefeKey.leadId);
+      if (!lead) continue;
+      const dir = path.dirname(jefe.jsonlFile);
+      let archivos: string[];
+      try {
+        archivos = fs.readdirSync(dir).filter((f) => f.endsWith('.meta.json'));
+      } catch {
+        continue;
+      }
+      for (const f of archivos) {
+        let meta: { toolUseId?: unknown };
+        try {
+          meta = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')) as { toolUseId?: unknown };
+        } catch {
+          continue;
+        }
+        if (meta.toolUseId !== toolId) continue;
+        const jsonlPath = path.join(dir, f.replace(/\.meta\.json$/, '.jsonl'));
+        this.anidadosPendientes.delete(toolId);
+        if (!this.isWatching(jsonlPath)) {
+          this.watch(
+            lead,
+            jefeKey.leadId,
+            { jsonlPath, toolUseId: toolId },
+            { toolId: jefeKey.spawnToolUseId, shadowId: p.jefeShadowId },
+          );
+        }
+        break;
+      }
+    }
+    if (this.anidadosPendientes.size === 0) this.pararPollAnidados();
+  }
+
+  private pararPollAnidados(): void {
+    if (this.pollAnidados) clearInterval(this.pollAnidados);
+    this.pollAnidados = null;
   }
 
   private remove(id: number): void {
@@ -150,15 +241,34 @@ export class SubagentWatch {
     this.pollingTimers.delete(id);
     cancelWaitingTimer(id, this.waitingTimers);
     cancelPermissionTimer(id, this.permissionTimers);
+    const key = this.subKeys.get(id);
     this.subKeys.delete(id);
     this.liveToolIds.delete(id);
     this.store.delete(id);
+    // personal: un agente anidado no tiene quien lo borre del lado del lead: se avisa acá.
+    if (key?.jefeToolId) {
+      this.mainStore.broadcast({
+        type: 'subagentClear',
+        id: key.leadId,
+        parentToolId: key.spawnToolUseId,
+      });
+    }
+    // personal: si se va un manager, se van con él los agentes que lanzó (y los que esperaban su sidecar).
+    for (const [hijo, k] of [...this.subKeys]) {
+      if (k.jefeShadowId === id) this.remove(hijo);
+    }
+    for (const [toolId, p] of [...this.anidadosPendientes]) {
+      if (p.jefeShadowId === id) this.anidadosPendientes.delete(toolId);
+    }
   }
 
   /** Re-emit shadow-store activity on the main store as subagent* messages.
    *  Everything not listed here (agentTokenUsage, agentTeamInfo, the shadow's
    *  own nested subagent* messages) is deliberately dropped: the sub-character
-   *  has no context gauge, no team badge, and no sub-sub-characters.
+   *  has no context gauge and no team badge. personal: sub-sub-characters DO
+   *  exist here — when a watched sub (a manager) spawns an agent, its transcript
+   *  is watched too (buscarAnidados) and shown as a sibling sub-character keyed
+   *  (lead, nested spawn id), with `jefeToolId` naming the manager's spawn.
    *
    *  Per-tool dones are DEFERRED to the sub's turn end: emitting them as they
    *  happen made the sub-character flap between typing and idle on every
@@ -171,11 +281,25 @@ export class SubagentWatch {
     const shadowId = message.id as number;
     const key = this.subKeys.get(shadowId);
     if (!key) return;
-    const { leadId, spawnToolUseId } = key;
+    const { leadId, spawnToolUseId, jefeToolId } = key;
 
     switch (message.type) {
       case 'agentToolStart': {
         const toolId = message.toolId as string;
+        // personal: el sub-agente lanza a otro (un manager que delega): buscar su transcript.
+        if (
+          typeof message.status === 'string' &&
+          message.status.startsWith('Subtask:') &&
+          !this.anidadosPendientes.has(toolId) &&
+          ![...this.subKeys.values()].some((k) => k.spawnToolUseId === toolId)
+        ) {
+          this.anidadosPendientes.set(toolId, { jefeShadowId: shadowId, desde: Date.now() });
+          this.buscarAnidados();
+          if (this.anidadosPendientes.size > 0 && !this.pollAnidados) {
+            this.pollAnidados = setInterval(() => this.buscarAnidados(), ANIDADO_POLL_MS);
+            this.pollAnidados.unref?.();
+          }
+        }
         let live = this.liveToolIds.get(shadowId);
         if (!live) {
           live = new Set();
@@ -188,6 +312,7 @@ export class SubagentWatch {
           parentToolId: spawnToolUseId,
           toolId,
           status: message.status,
+          ...(jefeToolId ? { jefeToolId } : {}),
         });
         break;
       }
@@ -206,6 +331,7 @@ export class SubagentWatch {
           type: 'subagentToolPermission',
           id: leadId,
           parentToolId: spawnToolUseId,
+          ...(jefeToolId ? { jefeToolId } : {}),
         });
         break;
       }
