@@ -46,7 +46,8 @@ export type ServerMessage =
   | OficinasEstado
   | OficinaAsignada
   | SkinsPersonalesLoaded
-  | ConfigVoz;
+  | ConfigVoz
+  | ConfigApagado;
 
 export type ClientMessage =
   | WebviewReady
@@ -79,7 +80,9 @@ export type ClientMessage =
   | PedirOficinas
   | SetVozSesion
   | PedirConfigVoz
-  | SetConfigVoz;
+  | SetConfigVoz
+  | PedirApagado
+  | SetApagado;
 
 export interface ProviderCapabilities {
   type: 'providerCapabilities';
@@ -413,6 +416,13 @@ export interface AnonymousSchema_238 {
   esperando: boolean;
 }
 
+export interface ConfigApagado {
+  type: 'configApagado';
+  opcion: OpcionApagado;
+}
+
+export type OpcionApagado = 'sin_pestanas' | '30m' | '1h' | '2h' | '4h' | 'nunca';
+
 export interface WebviewReady {
   type: 'webviewReady';
 }
@@ -545,10 +555,10 @@ export interface RecargarOficina {
 export interface AbrirProyecto {
   type: 'abrirProyecto';
   sala: string;
-  accion: AnonymousSchema_295;
+  accion: AnonymousSchema_296;
 }
 
-export type AnonymousSchema_295 = 'carpeta' | 'vscode';
+export type AnonymousSchema_296 = 'carpeta' | 'vscode';
 
 export interface AsignarOficina {
   type: 'asignarOficina';
@@ -573,8 +583,17 @@ export interface PedirConfigVoz {
 
 export interface SetConfigVoz {
   type: 'setConfigVoz';
-  caso: AnonymousSchema_306;
+  caso: AnonymousSchema_307;
   valor: boolean;
 }
 
-export type AnonymousSchema_306 = 'pregunta' | 'permiso' | 'fin_pregunta' | 'esperando';
+export type AnonymousSchema_307 = 'pregunta' | 'permiso' | 'fin_pregunta' | 'esperando';
+
+export interface PedirApagado {
+  type: 'pedirApagado';
+}
+
+export interface SetApagado {
+  type: 'setApagado';
+  opcion: OpcionApagado;
+}

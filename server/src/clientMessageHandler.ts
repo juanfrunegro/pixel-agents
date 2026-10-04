@@ -14,6 +14,7 @@ import {
 import { HUE_SHIFT_MAX_DEG, PALETTE_COUNT } from './constants.js';
 import { readLayoutFromFile, writeLayoutToFile } from './layoutPersistence.js';
 import { abrirProyecto } from './personal/abrir.js';
+import { escribirApagado, leerApagado } from './personal/apagado.js';
 import { asignarOficina } from './personal/ocupacion.js';
 import {
   candidatoDeRuta,
@@ -396,6 +397,21 @@ export function handleClientMessage(
       if (!ctx.privileged) break;
       escribirConfigVoz(msg.caso, msg.valor);
       send({ type: 'configVoz', casos: leerConfigVoz() });
+      break;
+    }
+
+    case 'pedirApagado': {
+      // Botón de apagado automático (barra de abajo): cuándo se apaga sola la oficina.
+      if (!ctx.privileged) break;
+      send({ type: 'configApagado', opcion: leerApagado() });
+      break;
+    }
+
+    case 'setApagado': {
+      // Cambiar cuándo se apaga sola (lo aplica ~/.claude/hooks/pixel_agents.py). Solo con token.
+      if (!ctx.privileged) break;
+      escribirApagado(msg.opcion);
+      send({ type: 'configApagado', opcion: leerApagado() });
       break;
     }
 

@@ -127,6 +127,7 @@ components:
         - $ref: '#/components/schemas/OficinaAsignada'
         - $ref: '#/components/schemas/SkinsPersonalesLoaded'
         - $ref: '#/components/schemas/ConfigVoz'
+        - $ref: '#/components/schemas/ConfigApagado'
       discriminator: type
 
     ClientMessage:
@@ -163,6 +164,8 @@ components:
         - $ref: '#/components/schemas/SetVozSesion'
         - $ref: '#/components/schemas/PedirConfigVoz'
         - $ref: '#/components/schemas/SetConfigVoz'
+        - $ref: '#/components/schemas/PedirApagado'
+        - $ref: '#/components/schemas/SetApagado'
       discriminator: type
 
     # ── Personal (copia de juanfrunegro) ──────────────────────────
@@ -393,6 +396,45 @@ components:
               type: boolean
             esperando:
               type: boolean
+
+    PedirApagado:
+      description: Pide cuándo se apaga sola la oficina (~/.pixel-agents/apagado.json). Contesta con configApagado. Solo con token.
+      type: object
+      additionalProperties: false
+      required: [type]
+      properties:
+        type:
+          const: pedirApagado
+
+    SetApagado:
+      description: >-
+        Cambia cuándo se apaga sola la oficina. sin_pestanas = solo sin pestañas abiertas y 20 min sin actividad;
+        30m/1h/2h/4h = tras ese tiempo sin actividad aunque haya una pestaña abierta; nunca. Lo aplica
+        ~/.claude/hooks/pixel_agents.py. Contesta con configApagado. Solo con token.
+      type: object
+      additionalProperties: false
+      required: [type, opcion]
+      properties:
+        type:
+          const: setApagado
+        opcion:
+          $ref: '#/components/schemas/OpcionApagado'
+
+    OpcionApagado:
+      description: Cuándo se apaga sola la oficina (ver SetApagado).
+      type: string
+      enum: [sin_pestanas, 30m, 1h, 2h, 4h, nunca]
+
+    ConfigApagado:
+      description: Cuándo se apaga sola la oficina (sin_pestanas si no hay config).
+      type: object
+      additionalProperties: false
+      required: [type, opcion]
+      properties:
+        type:
+          const: configApagado
+        opcion:
+          $ref: '#/components/schemas/OpcionApagado'
 
     OficinasEstado:
       description: Qué proyecto ocupa cada oficina asignable (null = libre) y qué proyectos de Orca se pueden asignar.

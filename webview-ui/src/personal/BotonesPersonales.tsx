@@ -2,7 +2,7 @@
  * Personal (copia de juanfrunegro): botones "Recargar", filtro "Todos | Windows | WSL", "Organigrama", "Hoy" (resumen del
  * día) y "Apagar" de la barra de abajo, y el cupo de cada cuenta (solo en el navegador). Recargar vuelve a armar las salas con los proyectos de Orca sin reiniciar el servidor y recarga la
  * página. Apagar pide confirmación con un segundo clic y apaga el servidor; se vuelve a abrir solo con el próximo
- * agente.
+ * agente. Al lado, cuándo se apaga sola (lo aplica ~/.claude/hooks/pixel_agents.py; ver server/src/personal/apagado.ts).
  */
 import { useEffect, useState } from 'react';
 
@@ -48,6 +48,63 @@ function Cupos() {
         </span>
       ))}
     </span>
+  );
+}
+
+const OPCIONES_APAGADO = [
+  { id: 'sin_pestanas', texto: 'Sin pestañas' },
+  { id: '30m', texto: '30 min' },
+  { id: '1h', texto: '1 h' },
+  { id: '2h', texto: '2 h' },
+  { id: '4h', texto: '4 h' },
+  { id: 'nunca', texto: 'Nunca' },
+] as const;
+type OpcionApagado = (typeof OPCIONES_APAGADO)[number]['id'];
+
+/**
+ * Cuándo se apaga sola. "Sin pestañas" = como siempre (sin ninguna pestaña abierta y 20 min sin actividad); 30 min…4 h =
+ * tras ese tiempo sin actividad de Claude Code aunque esta pestaña siga abierta; Nunca. Se pide al conectar.
+ */
+function AutoApagado() {
+  const [opcion, setOpcion] = useState<OpcionApagado | null>(null);
+  useEffect(() => {
+    const pedir = () => transport.send({ type: 'pedirApagado' });
+    const sinMsg = transport.onMessage((msg) => {
+      if (msg.type === 'configApagado') setOpcion(msg.opcion);
+    });
+    const sinEstado = transport.onStateChange((e) => {
+      if (e === 'connected') pedir();
+    });
+    if (transport.state === 'connected') pedir();
+    return () => {
+      sinMsg();
+      sinEstado();
+    };
+  }, []);
+  if (!opcion) return null;
+  return (
+    <label
+      className="flex items-center gap-4 px-4 text-lg"
+      style={{ whiteSpace: 'nowrap' }}
+      title="Cuándo se apaga sola la oficina. «Sin pestañas»: solo si no hay ninguna pestaña abierta y pasan 20 min sin actividad. Con un tiempo: tras ese rato sin actividad de Claude Code, aunque esta pestaña siga abierta."
+    >
+      Se apaga sola:
+      <select
+        value={opcion}
+        onChange={(e) =>
+          transport.send({ type: 'setApagado', opcion: e.target.value as OpcionApagado })
+        }
+        className="bg-btn-bg hover:bg-btn-hover border-2 border-transparent rounded-none cursor-pointer py-3 px-6 text-lg"
+        style={{ color: 'inherit' }}
+        data-testid="auto-apagado"
+      >
+        {OPCIONES_APAGADO.map((o) => (
+          <option key={o.id} value={o.id}>
+            {o.texto}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 
@@ -157,6 +214,7 @@ export function BotonesPersonales() {
       >
         {confirmar ? '¿Apagar? (clic de nuevo)' : 'Apagar'}
       </Button>
+      <AutoApagado />
       <Cupos />
     </>
   );
