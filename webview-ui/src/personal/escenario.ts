@@ -17,6 +17,11 @@ import {
   MIC_PIE,
   MIC_REJILLA,
   MIC_SOMBRA,
+  PARLANTE_BORDE,
+  PARLANTE_CAJA,
+  PARLANTE_CENTRO,
+  PARLANTE_CONO,
+  PARLANTE_ONDA,
 } from './colores.js';
 
 /** Medio ancho de la tarima en tiles (a cada lado del centro) y su alto. */
@@ -87,7 +92,59 @@ function pieDeMicrofono(
   px(-1, y + 5, 1, 2, MIC_BRILLO); // reflejo
 }
 
-/** La tarima: debajo de los personajes. */
+/** Ancho y alto del parlante en píxeles del dibujo (a zoom 1). */
+const PARLANTE_W = 10;
+const PARLANTE_H = 16;
+/** Cada cuánto avanza una onda (ms) y cuántas se ven a la vez. */
+const ONDA_MS = 180;
+const ONDAS = 3;
+
+/**
+ * Parlante de pie en pixel art: caja oscura con un tweeter arriba y un woofer abajo. `x0` es el borde izquierdo y
+ * `yPiso` la línea donde apoya. Si `lado` no es 0, dibuja ondas hacia ese lado (−1 izquierda, 1 derecha) que avanzan con
+ * `ahora`: suenan mientras alguien presenta.
+ */
+function parlante(
+  ctx: CanvasRenderingContext2D,
+  x0: number,
+  yPiso: number,
+  zoom: number,
+  lado: -1 | 0 | 1,
+  ahora: number,
+): void {
+  const g = Math.max(1, Math.round(zoom));
+  const px = (x: number, y: number, w: number, h: number, color: string): void => {
+    ctx.fillStyle = color;
+    ctx.fillRect(x0 + x * g, yPiso - (y + h) * g, w * g, h * g);
+  };
+  px(-1, 0, PARLANTE_W + 2, 1, MIC_SOMBRA);
+  px(0, 0, PARLANTE_W, PARLANTE_H, PARLANTE_BORDE);
+  px(1, 1, PARLANTE_W - 2, PARLANTE_H - 2, PARLANTE_CAJA);
+  // Woofer (abajo): un cono redondeado de 6×6; mientras suena, el centro late.
+  const late = lado !== 0 && Math.floor(ahora / 90) % 2 === 0;
+  px(2, 2, 6, 6, PARLANTE_CONO);
+  px(3, 1, 4, 1, PARLANTE_CONO);
+  px(3, 8, 4, 1, PARLANTE_CONO);
+  px(late ? 3 : 4, late ? 3 : 4, late ? 4 : 2, late ? 4 : 2, PARLANTE_CENTRO);
+  // Tweeter (arriba).
+  px(4, 11, 2, 2, PARLANTE_CONO);
+  px(4, 12, 1, 1, PARLANTE_CENTRO);
+  if (lado === 0) return;
+  // Ondas: arcos que salen del woofer hacia afuera; la más nueva, más fuerte.
+  const fase = Math.floor(ahora / ONDA_MS);
+  const cy = 5; // centro del woofer
+  for (let k = 0; k < ONDAS; k++) {
+    const r = 2 + ((fase + k) % ONDAS) * 2;
+    ctx.globalAlpha = 1 - ((fase + k) % ONDAS) / ONDAS;
+    const x = lado < 0 ? -1 - r : PARLANTE_W + r;
+    px(x, cy - Math.floor(r / 2) + 1, 1, r, PARLANTE_ONDA);
+    px(x - lado, cy - Math.floor(r / 2), 1, 1, PARLANTE_ONDA);
+    px(x - lado, cy + Math.floor(r / 2) + 1, 1, 1, PARLANTE_ONDA);
+  }
+  ctx.globalAlpha = 1;
+}
+
+/** La tarima: debajo de los personajes. Con `sonando`, los parlantes de las puntas tiran ondas. */
 export function renderEscenario(
   ctx: CanvasRenderingContext2D,
   areaTiles: Array<string | null> | undefined,
@@ -96,6 +153,8 @@ export function renderEscenario(
   offsetX: number,
   offsetY: number,
   zoom: number,
+  sonando = false,
+  ahora = Date.now(),
 ): void {
   const e = escenarioDe(areaTiles, cols, rows);
   if (!e) return;
@@ -117,6 +176,18 @@ export function renderEscenario(
   // Frente de la tarima (el borde que se ve desde el público).
   ctx.fillStyle = ESCENARIO_BORDE;
   ctx.fillRect(x, y + alto - Math.round(s / 4), ancho, Math.round(s / 4));
+  // Parlantes en las puntas de atrás de la tarima, apenas adentro del borde.
+  const yPiso = Math.round(y + s - g);
+  const margen = 2 * g;
+  parlante(ctx, Math.round(x + margen), yPiso, zoom, sonando ? -1 : 0, ahora);
+  parlante(
+    ctx,
+    Math.round(x + ancho - margen - PARLANTE_W * g),
+    yPiso,
+    zoom,
+    sonando ? 1 : 0,
+    ahora,
+  );
   ctx.restore();
 }
 

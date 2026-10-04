@@ -642,7 +642,8 @@ function cafeteria(): Contenido {
 /**
  * Presentaciones: dos pantallas (pizarrones) a los costados de la pared, con el nombre de la sala en el medio; el
  * escenario libre en el centro (quien presenta se para en la fila ESCENARIO_FILA, mirando al público, con su tarjeta
- * dentro de la sala) y una fila de sillas abajo mirando hacia adelante. Se "prende" con el aviso por voz.
+ * dentro de la sala) y una fila de sillas abajo mirando hacia adelante, sobre una alfombra de teatro; plantas a los
+ * costados de la tarima. Se "prende" con el aviso por voz.
  */
 function presentaciones(): Contenido {
   const m: MuebleRelativo[] = [];
@@ -653,7 +654,25 @@ function presentaciones(): Contenido {
   for (const dx of [0, 1, 2, 3, 5, 6, 7, 8]) {
     m.push({ id: `silla-${dy}-${dx}`, type: 'WOODEN_CHAIR_BACK', dx, dy });
   }
-  return { muebles: m, puertas: [3, 5] };
+  // Plantas a los costados de la tarima (los parlantes los dibuja escenario.ts).
+  m.push({ id: 'planta-izq', type: 'PLANT', dx: 0, dy: 0 });
+  m.push({ id: 'planta-der', type: 'PLANT_2', dx: 8, dy: 0 });
+  return {
+    muebles: m,
+    puertas: [3, 5],
+    // Alfombra de teatro bajo el público, de punta a punta.
+    alfombras: [
+      {
+        dx: 0,
+        dy: dy - 1,
+        w: 9,
+        h: 3,
+        variant: 0,
+        color: tono(345, 70, -55),
+        accentColor: tono(45, 70, 10),
+      },
+    ],
+  };
 }
 
 function contenido(p: Pieza): Contenido {

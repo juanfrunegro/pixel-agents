@@ -564,6 +564,13 @@ export function presentandoDe(charId: number, ahora = Date.now()): boolean {
   return turnosAhora(ahora).get(charId) === 'escenario';
 }
 
+/** Alguien está diciendo su aviso en el escenario ahora (los parlantes de Presentaciones suenan). */
+export function hayPresentacion(ahora = Date.now()): boolean {
+  for (const [id, t] of turnosAhora(ahora))
+    if (t === 'escenario' && !estado.subs.has(id)) return true;
+  return false;
+}
+
 /**
  * Su último turno terminó con un aviso por voz y todavía no volvió a trabajar: se queda sentado en Presentaciones, así
  * se ve quién te habló. El aviso llega al final del turno (después de su última actividad); un turno posterior sin voz

@@ -51,7 +51,7 @@ import { personajesContratistas, renderCartelesContratistas } from '../../person
 import { renderEscenario, renderMicrofonoCentral } from '../../personal/escenario.js';
 import { ALFA_APAGADO, apagadoPorFiltro } from '../../personal/filtro.js';
 import { renderLuces, renderNoche } from '../../personal/luces.js';
-import { colorModelo, modeloDe } from '../../personal/personal.js';
+import { colorModelo, hayPresentacion, modeloDe } from '../../personal/personal.js';
 import { renderPizarra } from '../../personal/pizarra.js';
 import { renderPlacas } from '../../personal/placas.js';
 import { PisoCacheado } from '../../personal/rendimiento.js';
@@ -1035,7 +1035,8 @@ export function renderFrame(
     renderAreaOverlay(ctx, areaTiles, areas, cols, rows, offsetX, offsetY, zoom, activeAreaLabel);
   }
 
-  if (!editor) renderEscenario(ctx, areaTiles, cols, rows, offsetX, offsetY, zoom); // personal: tarima de Presentaciones
+  if (!editor)
+    renderEscenario(ctx, areaTiles, cols, rows, offsetX, offsetY, zoom, hayPresentacion()); // personal: tarima de Presentaciones
 
   // Seat indicators (below furniture/characters, on top of floor)
   if (selection) {
