@@ -1,13 +1,15 @@
 import Fastify from 'fastify';
 import { describe, expect, it } from 'vitest';
 
-import { htmlOrganigrama, registrarOrganigrama } from '../src/personal/organigrama.js';
+import { COLOR_CODEX, htmlOrganigrama, registrarOrganigrama } from '../src/personal/organigrama.js';
 import {
   costoUsd,
   equipoDe,
   esDeWsl,
+  leerPerfilCodex,
   limiteDe,
   metaDeSubagente,
+  permisoDe,
   proyectoDe,
   SEPARADOR_META,
 } from '../src/personal/personal.js';
@@ -64,15 +66,69 @@ describe('personal: organigrama', () => {
       uso: new Map(),
     });
     const pos = (t: string) => html.indexOf(t);
-    const capa = html.slice(pos('<section class="proyectos">'), pos('<main>'));
+    const capa = html.slice(
+      pos('<section class="proyectos">'),
+      pos('<section class="compartidos">'),
+    );
     expect(pos('<section class="proyectos">')).toBeGreaterThan(pos('class="ceo"'));
     expect(capa).toContain('<h3>ERP</h3>');
     expect(capa).toContain('<b>manager ERP</b>');
-    expect(capa).toContain('Jere · cobros</b><span class="int">conciliador-cobros · propio · ERP');
-    expect(capa).toContain('verificador · global');
+    expect(capa).toContain('<b>Jere · cobros</b>');
+    expect(capa).toContain('conciliador-cobros · propio · ERP');
+    // Los globales no se repiten como tarjeta: van como fichas de "puede llamar".
+    expect(capa).toContain('<span class="ch">Pepe · verificador</span>');
+    expect(capa).not.toContain('<b>verificador</b>');
     expect(capa).toContain('fantasma · no está definido');
+    expect(capa).toContain('class="roja"');
+    // El global aparece una sola vez, en servicios compartidos.
+    const compartidos = html.slice(pos('<section class="compartidos">'), pos('<details'));
+    expect(compartidos).toContain('<b>verificador</b>');
     // La persona del manager no se repite en las áreas.
     expect(html.slice(pos('<main>'))).not.toContain('<b>Rulo</b>');
+  });
+  it('contratistas: Codex con sus perfiles, quién los lanza y el permiso de datos', () => {
+    const html = htmlOrganigrama({
+      nombres: {
+        ceo: 'Juan',
+        roles: { Juan: 'CEO', Pepe: 'Revisa código', Tomo: 'Escribe código' },
+        agentes: {},
+        descartables: [],
+        externos: { codex: 'Pepe · Codex (GPT-6)', pi: 'Tomo · Pi (DeepSeek)' },
+      },
+      defs: new Map(),
+      uso: new Map(),
+      codex: new Map([
+        [
+          'revisor',
+          leerPerfilCodex(
+            'model = "gpt-6.1-sol"\nmodel_reasoning_effort = "medium"\nsandbox_mode = "read-only"\n[windows]\nsandbox = "unelevated"\n',
+            'r.toml',
+          ),
+        ],
+      ]),
+    });
+    const pos = (t: string) => html.indexOf(t);
+    const ct = html.slice(pos('<section class="contratistas">'), pos('<details'));
+    expect(ct).toContain('Codex · OpenAI GPT-6');
+    expect(ct).toContain('<b>perfil revisor</b>');
+    expect(ct).toContain('gpt-6.1-sol · medium');
+    expect(ct).toContain('class="chip per-lee"');
+    expect(ct).toContain('datos de terceros: OK (4/10)');
+    expect(ct).toContain('Pi · DeepSeek');
+    // El perfil de Codex va con el color de Codex.
+    expect(ct).toContain(COLOR_CODEX);
+  });
+  it('permisoDe y leerPerfilCodex: qué puede hacer cada agente', () => {
+    expect(permisoDe(undefined)).toBe('todo');
+    expect(permisoDe('Read, Grep, Glob, Bash')).toBe('lee');
+    expect(permisoDe('Read, Edit, Write')).toBe('escribe');
+    // Un manager que puede lanzar a un agente que escribe no escribe él.
+    expect(permisoDe('Read, Agent(corrector, Write)')).toBe('lee');
+    expect(leerPerfilCodex('sandbox_mode = "workspace-write"', 'x').permiso).toBe('escribe');
+    expect(leerPerfilCodex('model = "gpt-6-luna"', 'x')).toMatchObject({
+      modelo: 'gpt-6-luna',
+      permiso: 'todo',
+    });
   });
   it('equipoDe: lee la lista de Agent(…) y nada más', () => {
     expect(equipoDe('Read, Agent(a, b ,c)')).toEqual(['a', 'b', 'c']);

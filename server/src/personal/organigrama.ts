@@ -10,8 +10,8 @@ import * as path from 'path';
 import { aspectoDePersona, personaDe } from '../../../core/src/aspectoPersonal.js';
 import { skinDeNombre, SKINS_MARVEL } from '../../../core/src/skinsMarvel.js';
 import { PALETTE_COUNT } from '../constants.js';
-import type { Definicion, Nombres } from './personal.js';
-import { definiciones, esDeWsl, leerNombres, ordenPersonas } from './personal.js';
+import type { Definicion, Nombres, PerfilCodex, Permiso } from './personal.js';
+import { definiciones, esDeWsl, leerNombres, ordenPersonas, perfilesCodex } from './personal.js';
 
 interface Uso {
   veces: number;
@@ -63,8 +63,12 @@ function color(m?: string): string {
   if (x.includes('sonnet')) return '#3b9bd6';
   if (x.includes('fable')) return '#a463e0';
   if (x.includes('haiku')) return '#4cb36a';
+  if (x.includes('gpt')) return COLOR_CODEX;
   return '#9aa0ab';
 }
+
+/** Color de Codex (modelos GPT-6) en las fichas y la leyenda. */
+export const COLOR_CODEX = '#e0b23a';
 
 /** Proyectos que corren en WSL (otra cuenta, Max): sus agentes llevan la etiqueta "WSL". */
 const PROYECTOS_WSL = new Set(['ERP']);
@@ -122,12 +126,49 @@ interface Datos {
   nombres: Nombres;
   defs: Map<string, Definicion>;
   uso: Map<string, Uso>;
+  codex?: Map<string, PerfilCodex>;
 }
 
+const PERMISOS: Record<Permiso, [string, string]> = {
+  lee: ['solo lee', 'per-lee'],
+  escribe: ['escribe', 'per-escribe'],
+  todo: ['todas las herramientas', 'per-todo'],
+};
+const chipPermiso = (p?: Permiso): string =>
+  p ? ` <span class="chip ${PERMISOS[p][1]}">${PERMISOS[p][0]}</span>` : '';
+
+/**
+ * Otros motores (fuera de Claude Code): quién los lanza y si pueden ver datos de terceros. Las
+ * autorizaciones son de Juan (CLAUDE.md global); todos con la recopilación de datos desactivada.
+ */
+const CONTRATISTAS: Record<string, { motor: string; lanza: string; datos: string }> = {
+  codex: {
+    motor: 'Codex · OpenAI GPT-6 (Sol, Luna, Astra)',
+    lanza: 'el CEO, por Orca o codex exec -p <perfil>',
+    datos: 'datos de terceros: OK (4/10)',
+  },
+  pi: {
+    motor: 'Pi · DeepSeek',
+    lanza: 'el CEO, por Orca (solo Windows)',
+    datos: 'datos de terceros: OK (1/10)',
+  },
+  antigravity: {
+    motor: 'Antigravity · Gemini',
+    lanza: 'el CEO, con agy -p (investigación)',
+    datos: 'datos de terceros: OK (2/10)',
+  },
+};
+
 export function htmlOrganigrama(
-  datos: Datos = { nombres: leerNombres(), defs: definiciones(), uso: usoPorAgente() },
+  datos: Datos = {
+    nombres: leerNombres(),
+    defs: definiciones(),
+    uso: usoPorAgente(),
+    codex: perfilesCodex(),
+  },
 ): string {
   const { nombres: n, defs, uso } = datos;
+  const codex = datos.codex ?? new Map<string, PerfilCodex>();
   const roles = (n.roles ?? {}) as Record<string, string>;
   const externos = (n.externos ?? {}) as Record<string, string>;
   const orden = ordenPersonas(n);
@@ -177,7 +218,7 @@ export function htmlOrganigrama(
       ? `${u.veces} ${u.veces === 1 ? 'vez' : 'veces'} · US$ ${(u.costo / u.veces).toFixed(2)} promedio · notas ${u.bien} bien / ${u.mal} mal · última ${esc(u.ultima)}`
       : 'sin uso registrado todavía';
     return `<li class="ag" style="border-left-color:${color(d.modelo)}">${avatar(persona, orden)}<div>
-      <b>${esc(puesto)}</b> <span class="chip" style="background:${color(d.modelo)}">${esc(d.modelo ?? 'hereda')}${d.esfuerzo ? ' · ' + esc(d.esfuerzo) : ''}</span>${PROYECTOS_WSL.has(d.proyecto) || esDeWsl(d.archivo) ? ' <span class="chip wsl">WSL</span>' : ''}
+      <b>${esc(puesto)}</b><span class="chips"><span class="chip" style="background:${color(d.modelo)}">${esc(d.modelo ?? 'hereda')}${d.esfuerzo ? ' · ' + esc(d.esfuerzo) : ''}</span>${chipPermiso(d.permiso)}${PROYECTOS_WSL.has(d.proyecto) || esDeWsl(d.archivo) ? ' <span class="chip wsl">WSL</span>' : ''}</span>
       <span class="int">${esc(interno)} · ${esc(d.proyecto)}</span>
       <p>${esc((d.descripcion ?? '').slice(0, 200))}</p><span class="uso">${rinde}</span></div></li>`;
   };
@@ -192,27 +233,71 @@ export function htmlOrganigrama(
     const d = defs.get(interno);
     const nombre = n.agentes[interno] ?? interno;
     const p = personaDeAgente(interno);
-    const origen = !d
-      ? 'no está definido'
-      : d.proyecto === 'Todos'
-        ? 'global'
-        : `propio · ${d.proyecto}`;
-    return `<li class="mi">${p ? avatar(p, orden) : ''}<div><b>${esc(nombre)}</b><span class="int">${esc(interno)} · ${esc(origen)}</span></div></li>`;
+    const origen = d ? `propio · ${d.proyecto}` : 'no está definido';
+    const chips = d
+      ? `<span class="chips"><span class="chip" style="background:${color(d.modelo)}">${esc(d.modelo ?? 'hereda')}</span>${chipPermiso(d.permiso)}</span>`
+      : '';
+    return `<li class="mi">${p ? avatar(p, orden) : ''}<div><b>${esc(nombre)}</b>${chips}<span class="int">${esc(interno)} · ${esc(origen)}</span></div></li>`;
   };
+  const esGlobal = (interno: string) => defs.get(interno)?.proyecto === 'Todos';
   const proyectos = managers.length
     ? `<section class="proyectos"><h2>Proyectos</h2><p class="rol">Cada manager reparte el trabajo de su proyecto, revisa con evidencia y responde ante el CEO. Su equipo sale de la línea <code>tools: Agent(…)</code> de su archivo: solo puede lanzar a esos.</p><div class="pys">${managers
         .map((m) => {
           const d = defs.get(m)!;
           const p = personaDeAgente(m);
           const equipoM = d.equipo ?? [];
+          const propios = equipoM.filter((i) => !esGlobal(i));
+          const globales = equipoM.filter(esGlobal);
           return `<div class="py"><h3>${esc(d.proyecto)}</h3><ul>${agente(m, p)}</ul>${
             equipoM.length
-              ? `<ul class="eq">${equipoM.map(miembro).join('')}</ul>`
+              ? `${propios.length ? `<ul class="eq">${propios.map(miembro).join('')}</ul>` : ''}${
+                  globales.length
+                    ? `<p class="usa">Puede llamar de servicios compartidos: ${globales
+                        .map((g) => `<span class="ch">${esc(n.agentes[g] ?? g)}</span>`)
+                        .join('')}</p>`
+                    : ''
+                }`
               : '<p class="vac">Sin equipo: le falta Agent(…) en tools</p>'
-          }</div>`;
+          }<p class="roja">Lista roja → Juan: estructura de la base, borrar o mover plata, mensajes o pagos hacia afuera, producción, deploy</p></div>`;
         })
         .join('')}</div></section>`
     : '';
+
+  // Servicios compartidos: los globales, una sola vez (los managers los llaman desde su proyecto).
+  const globalesTodos = [...defs.keys()].filter((k) => esGlobal(k) && !k.startsWith('manager-'));
+  const compartidos = globalesTodos.length
+    ? `<section class="compartidos"><h2>Servicios compartidos</h2><p class="rol">Agentes globales: sirven a todos los proyectos. Los lanza el CEO o el manager que los tenga en su equipo.</p><ul class="cs">${globalesTodos
+        .map((g) => agente(g, personaDeAgente(g)))
+        .join('')}</ul></section>`
+    : '';
+
+  // Contratistas: otros motores, fuera de Claude Code. Los perfiles de Codex son sus "agentes".
+  const tarjetaPerfil = ([nombre, pf]: [string, PerfilCodex]): string => {
+    const clave = `codex:${nombre}`;
+    const persona =
+      personaDeAgente(clave) ||
+      personaDeAgente('codex') ||
+      (externos.codex ? personaDe(externos.codex) : '');
+    const u = uso.get(clave);
+    return `<li class="ag" style="border-left-color:${color(pf.modelo)}">${persona ? avatar(persona, orden) : ''}<div>
+      <b>perfil ${esc(nombre)}</b><span class="chips"><span class="chip" style="background:${color(pf.modelo)}">${esc(pf.modelo ?? 'modelo por defecto')}${pf.esfuerzo ? ' · ' + esc(pf.esfuerzo) : ''}</span>${chipPermiso(pf.permiso)}</span>
+      <span class="int">codex exec -p ${esc(nombre)}</span><span class="uso">${u ? `${u.veces} veces` : 'sin uso registrado (Codex no pasa por el registro de rendimiento)'}</span></div></li>`;
+  };
+  const contratistas =
+    Object.keys(externos).length || codex.size
+      ? `<section class="contratistas"><h2>Contratistas · otros motores</h2><p class="rol">Fuera de Claude Code: no aparecen en la oficina y los managers no los pueden lanzar (no tienen Bash). Los contrata el CEO.</p><div class="cts">${Object.entries(
+          externos,
+        )
+          .map(([k, nombre]) => {
+            const c = CONTRATISTAS[k];
+            const persona = personaDe(nombre);
+            const perfiles = k === 'codex' ? [...codex.entries()] : [];
+            return `<div class="ct">${avatar(persona, orden, true)}<div><b>${esc(c?.motor ?? nombre)}</b><span class="rol">${esc(persona)} · lo lanza ${esc(c?.lanza ?? 'el CEO')}</span><span class="dato">${esc(c?.datos ?? 'datos de terceros: sin definir')}</span></div>${
+              perfiles.length ? `<ul class="pf">${perfiles.map(tarjetaPerfil).join('')}</ul>` : ''
+            }</div>`;
+          })
+          .join('')}</div></section>`
+      : '';
 
   const bloques = [...areas.entries()]
     .map(
@@ -260,12 +345,24 @@ ul{list-style:none;margin:0 0 0 22px;padding:0 0 0 12px;border-left:2px solid #3
 .pys{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:14px;margin-top:10px}
 .py{display:grid;gap:8px;align-content:start}.py h3{margin:0;font-size:17px}
 .mi{display:flex;gap:8px;align-items:center;padding:12px 8px 4px 6px;background:#262a35;border-radius:3px}.mi div{display:grid;gap:2px;min-width:0}
+.usa{margin:2px 0 0;font-size:13px;color:#9ba2b0;display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+.ch{border:1px dashed #6b7385;border-radius:3px;padding:0 6px;color:#c9cdd6;font-size:12px}
+.roja{margin:2px 0 0;font-size:12px;color:#f3a2a2;border-left:3px solid #d9534f;padding-left:6px}
+.compartidos,.contratistas{margin:0 0 22px;background:#1f222b;border:1px solid #2f3440;border-radius:6px;padding:14px 12px}
+.contratistas{border-style:dashed;border-color:#4a5163}
+.cs{margin:10px 0 0;padding:0;border:0;display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:8px}
+.cts{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:12px;margin-top:10px}
+.ct{display:grid;grid-template-columns:auto 1fr;gap:6px 10px;align-items:center;background:#262a35;border-left:4px dashed #6b7385;border-radius:3px;padding:18px 10px 8px}
+.ct>div{display:grid;gap:2px}.ct .pf{grid-column:1/-1;margin:4px 0 0}.dato{font-size:12px;color:#7fd19b}
+details.personas{margin-top:8px}details.personas>summary{cursor:pointer;font-size:17px;font-weight:700;margin-bottom:14px}
+.per-lee{background:#7fd19b}.per-escribe{background:#e0b23a}.per-todo{background:#f3a2a2}
+.chips{display:flex;flex-wrap:wrap;gap:4px;margin:1px 0}
 .chip{font-size:11px;font-weight:700;color:#111;padding:0 6px;border-radius:3px;white-space:nowrap}.chip.wsl{background:${COLOR_WSL};color:#fff}.vac{margin:0 0 0 34px;color:#9ba2b0;font-size:13px}
 </style></head><body><h1>Organigrama de agentes</h1>
 <p class="sub">Armado en vivo con nombres.json, la definición de cada agente y el registro de rendimiento. Cada persona tiene su personaje, el mismo que usa en la oficina. Para cambiar un nombre: ficha del agente en la oficina o ~/.claude/agents/nombres.json (ahí también se cambian las áreas, con la clave "areas").</p>
-<div class="ley"><span><i style="background:#e8832a"></i>Opus</span><span><i style="background:#3b9bd6"></i>Sonnet</span><span><i style="background:#a463e0"></i>Fable</span><span><i style="background:#4cb36a"></i>Haiku</span><span><i style="background:#9aa0ab"></i>hereda del que lo lanza</span><span><i style="background:${COLOR_WSL}"></i>WSL: corre en WSL con la cuenta Max (el resto, en Windows con la Pro)</span></div>
-<div class="ceo"><div class="tarjeta">${avatar(ceo, orden, true)}<div><b>${esc(n.ceo)}</b><span class="rol">${esc(roles[ceo] ?? 'CEO')}</span><br><span class="int">sesión principal · en la oficina cada sesión tiene su propio personaje</span></div></div></div>
-${proyectos}<main>${bloques}${sin}</main>${seccionExternos(orden)}</body></html>`;
+<div class="ley"><span><i style="background:#e8832a"></i>Opus</span><span><i style="background:#3b9bd6"></i>Sonnet</span><span><i style="background:#a463e0"></i>Fable</span><span><i style="background:#4cb36a"></i>Haiku</span><span><i style="background:${COLOR_CODEX}"></i>Codex (GPT-6)</span><span><i style="background:#9aa0ab"></i>hereda del que lo lanza</span><span><i style="background:${COLOR_WSL}"></i>WSL: corre en WSL con la cuenta Max (el resto, en Windows con la Pro)</span></div>
+<div class="ceo"><div class="tarjeta">${avatar(ceo, orden, true)}<div><b>${esc(n.ceo)}</b><span class="rol">${esc(roles[ceo] ?? 'CEO')}</span><br><span class="int">sesión principal · en la oficina cada sesión tiene su propio personaje</span><br><span class="int">le reportan los managers · contrata a los otros motores · decide la lista roja</span></div></div></div>
+${proyectos}${compartidos}${contratistas}<details class="personas"><summary>Por persona (áreas): cada persona con todos sus agentes</summary><main>${bloques}${sin}</main></details>${seccionExternos(orden)}</body></html>`;
 }
 
 /** Ruta GET /organigrama: solo con el token de la oficina (muestra información de los negocios). */

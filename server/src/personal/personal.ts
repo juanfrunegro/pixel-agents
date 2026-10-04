@@ -154,6 +154,62 @@ export interface Definicion {
   proyecto: string;
   /** Agentes que puede lanzar (de `tools: Agent(a, b)`): el equipo de un manager. */
   equipo?: string[];
+  /** Qué puede hacer con sus herramientas (de `tools:`). */
+  permiso?: Permiso;
+}
+
+/** lee = sin Edit/Write; escribe = Edit/Write; todo = sin `tools:` (hereda todas). */
+export type Permiso = 'lee' | 'escribe' | 'todo';
+
+export function permisoDe(tools: string | undefined): Permiso {
+  if (!tools) return 'todo';
+  return /\b(Edit|Write|NotebookEdit|MultiEdit)\b/.test(tools.replace(/Agent\([^)]*\)/, ''))
+    ? 'escribe'
+    : 'lee';
+}
+
+/** Un perfil de Codex (`~/.claude/codex-perfiles/<nombre>.config.toml`): el "agente" de Codex. */
+export interface PerfilCodex {
+  modelo?: string;
+  esfuerzo?: string;
+  permiso: Permiso;
+  archivo: string;
+}
+
+/** Claves de primer nivel de un TOML simple (antes de la primera [tabla]). */
+export function leerPerfilCodex(texto: string, archivo: string): PerfilCodex {
+  const base = texto.split(/^\[/m)[0];
+  const clave = (k: string) => new RegExp(`^${k}\\s*=\\s*"([^"]*)"`, 'm').exec(base)?.[1];
+  const sandbox = clave('sandbox_mode');
+  return {
+    modelo: clave('model'),
+    esfuerzo: clave('model_reasoning_effort'),
+    permiso: sandbox === 'read-only' ? 'lee' : sandbox === 'workspace-write' ? 'escribe' : 'todo',
+    archivo,
+  };
+}
+
+export function perfilesCodex(): Map<string, PerfilCodex> {
+  const dir = path.join(claude(), 'codex-perfiles');
+  const perfiles = new Map<string, PerfilCodex>();
+  let archivos: string[] = [];
+  try {
+    archivos = fs.readdirSync(dir).filter((f) => f.endsWith('.config.toml'));
+  } catch {
+    return perfiles;
+  }
+  for (const f of archivos) {
+    try {
+      const archivo = path.join(dir, f);
+      perfiles.set(
+        f.replace(/\.config\.toml$/, ''),
+        leerPerfilCodex(fs.readFileSync(archivo, 'utf8'), archivo),
+      );
+    } catch {
+      /* ilegible: se ignora */
+    }
+  }
+  return perfiles;
 }
 
 let indice: Map<string, Definicion> | null = null;
@@ -218,6 +274,7 @@ export function definiciones(): Map<string, Definicion> {
           esfuerzo: campo(fm, 'effort'),
           descripcion: campo(fm, 'description'),
           equipo: equipoDe(campo(fm, 'tools')),
+          permiso: permisoDe(campo(fm, 'tools')),
           archivo: path.join(dir, f),
           proyecto,
         });
