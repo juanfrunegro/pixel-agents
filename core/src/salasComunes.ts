@@ -8,6 +8,8 @@ export const SALA_BIBLIOTECA = 'Biblioteca';
 export const SALA_CAFETERIA = 'Cafetería';
 export const SALA_REUNIONES = 'Reuniones';
 export const SALA_PRESENTACIONES = 'Presentaciones';
+/** Cabina de los otros motores (Codex, Pi, Antigravity), que no son sesiones de Claude: los dibuja el webview con lo que dice Orca. */
+export const SALA_CONTRATISTAS = 'Contratistas';
 
 /**
  * Escenario de Presentaciones: fila (contada desde la primera fila de piso de la sala) donde se para quien presenta.
@@ -21,6 +23,7 @@ export const SALAS_COMUNES: readonly string[] = [
   SALA_CAFETERIA,
   SALA_REUNIONES,
   SALA_PRESENTACIONES,
+  SALA_CONTRATISTAS,
 ];
 
 export function esSalaComun(nombre: string | null | undefined): boolean {
@@ -39,4 +42,24 @@ export function nombreLibre(lugar: number): string {
 
 export function esOficinaLibre(nombre: string | null | undefined): boolean {
   return !!nombre && /^Libre \d+$/.test(nombre);
+}
+
+/**
+ * Oficina por niveles: asientos con dueño por rol. En cada oficina de proyecto, el escritorio del manager (arriba al
+ * centro); en el Brain, el del CEO. Nadie más se sienta ahí: el manager llega cuando lo lanzan y el CEO cuando delega.
+ * Los uid de los muebles son `<sala>-<id>` (server/src/personal/oficina.ts).
+ */
+export const ID_SILLA_MANAGER = 'manager-silla';
+export const ID_SILLA_CEO = 'ceo-silla';
+
+export function esSillaManager(uid: string | null | undefined): boolean {
+  return !!uid && uid.endsWith(`-${ID_SILLA_MANAGER}`);
+}
+
+export function esSillaCeo(uid: string | null | undefined): boolean {
+  return !!uid && uid.endsWith(`-${ID_SILLA_CEO}`);
+}
+
+export function esAsientoReservado(uid: string | null | undefined): boolean {
+  return esSillaManager(uid) || esSillaCeo(uid);
 }

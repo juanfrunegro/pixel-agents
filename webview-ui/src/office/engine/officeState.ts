@@ -1,5 +1,9 @@
 import { pickDiversePalette } from '../../../../core/src/paletteUtils.js';
-import { esOficinaLibre, esSalaComun } from '../../../../core/src/salasComunes.js';
+import {
+  esAsientoReservado,
+  esOficinaLibre,
+  esSalaComun,
+} from '../../../../core/src/salasComunes.js';
 import {
   AUTO_ON_FACING_DEPTH,
   AUTO_ON_SIDE_DEPTH,
@@ -370,9 +374,11 @@ export class OfficeState {
     const electronicsTiles = this.buildElectronicsTileSet();
     const freeSeats: string[] = [];
     for (const [uid, seat] of this.seats) {
-      // personal: en las salas compartidas (cafetería, reuniones…) ni en las oficinas libres tiene su puesto nadie
+      // personal: en las salas compartidas (cafetería, reuniones…) ni en las oficinas libres tiene su puesto nadie,
+      // y las sillas del manager y del CEO son de su rol (oficina por niveles)
       const zona = this.seatZone(uid);
-      if (!seat.assigned && !esSalaComun(zona) && !esOficinaLibre(zona)) freeSeats.push(uid);
+      if (!seat.assigned && !esSalaComun(zona) && !esOficinaLibre(zona) && !esAsientoReservado(uid))
+        freeSeats.push(uid);
     }
     if (freeSeats.length === 0) return null;
 

@@ -44,6 +44,8 @@ export const CARTEL_TEXTO = '#e8e6f0';
 export const CARTEL_TEXTO_RESALTADO = '#ffffff';
 export const CARTEL_BORDE = '#3a3a55';
 export const SALA_ACLARADO = '#ffffff';
+/** Placa del escritorio del CEO (placas.ts): filete dorado. */
+export const PLACA_CEO = '#e8c547';
 
 /** Escenario de Presentaciones (escenario.ts): tarima de madera y micrófonos. */
 export const ESCENARIO_MADERA = '#8a5a34';

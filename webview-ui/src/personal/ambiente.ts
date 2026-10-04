@@ -18,6 +18,7 @@
  * Además, cada cuadro calcula las luces de las salas (luces.ts): deploy y Presentaciones.
  */
 import {
+  esAsientoReservado,
   SALA_CAFETERIA,
   SALA_PRESENTACIONES,
   SALA_REUNIONES,
@@ -54,6 +55,7 @@ import {
   vozDe,
 } from './personal.js';
 import { marcoPizarra, setGentePizarra } from './pizarra.js';
+import { setPlacas } from './placas.js';
 import {
   DURACION_PROYECTO_MS,
   ESPERA_LLEGADA_MS,
@@ -159,6 +161,7 @@ export function baseDe(os: OfficeState, sub: Character, ahora = Date.now()): Bas
     let clave = Infinity;
     for (const [uid, s] of os.seats) {
       if (uid === padre.seatId || prestadas.has(uid) || os.seatZone(uid) !== oficina) continue;
+      if (esAsientoReservado(uid)) continue; // la silla del manager o del CEO
       const dueno = duenos.get(uid);
       if (dueno ? dueno.lugar !== 'cafeteria' : s.assigned) continue;
       const d = Math.abs(s.seatCol - silla.seatCol) + Math.abs(s.seatRow - silla.seatRow);
@@ -470,6 +473,8 @@ export function gentePorProyecto(os: OfficeState, ahora: number): Map<string, nu
 }
 
 function tickLuces(os: OfficeState, ahora: number): void {
+  const layout = os.getLayout();
+  setPlacas(layout.furniture, (col, row) => layout.areaTiles?.[row * layout.cols + col] ?? null);
   setSalasPrendidas(salasConGente(os, ahora));
   marcoPizarra(os.getLayout().furniture, (tipo) => {
     const e = getCatalogEntry(tipo);

@@ -11,10 +11,12 @@ import * as os from 'os';
 import * as path from 'path';
 
 import {
+  esAsientoReservado,
   ESCENARIO_FILA,
   esSalaComun,
   SALA_BIBLIOTECA,
   SALA_CAFETERIA,
+  SALA_CONTRATISTAS,
   SALA_DISENO,
   SALA_PRESENTACIONES,
   SALA_REUNIONES,
@@ -359,7 +361,7 @@ export function asignacion(
 // Tres franjas de salas separadas por pasillos de 2 filas, para que toda la oficina entre en una pantalla:
 //
 //   arriba:  oficina  oficina  | Diseño     |  oficina  oficina
-//   medio:   Biblioteca        |   BRAIN    |  Reuniones
+//   medio:   Contratistas Biblioteca | BRAIN |  Reuniones
 //   abajo:   oficina  oficina  | Cafetería  Presentaciones |  oficina
 //
 // y una franja más de oficinas abajo solo si hay más de 7 proyectos. Las oficinas de proyecto son chicas y solo tienen
@@ -380,10 +382,18 @@ const COLORES_COMUNES: Record<string, string> = {
   [SALA_CAFETERIA]: '#d9a441',
   [SALA_REUNIONES]: '#5d8fd9',
   [SALA_PRESENTACIONES]: '#e8c547',
+  [SALA_CONTRATISTAS]: '#e0a030',
 };
 
 type Tipo =
-  'oficina' | 'brain' | 'diseno' | 'biblioteca' | 'reuniones' | 'cafeteria' | 'presentaciones';
+  | 'oficina'
+  | 'brain'
+  | 'diseno'
+  | 'biblioteca'
+  | 'reuniones'
+  | 'cafeteria'
+  | 'presentaciones'
+  | 'contratistas';
 
 interface Pieza {
   tipo: Tipo;
@@ -415,11 +425,29 @@ interface Contenido {
 
 const PARED_ARRIBA = -2;
 
-/** Oficina de proyecto: dos filas de tres escritorios con su PC y su banco (6 puestos). Finanzas cambia uno por la mesa contable. */
+/**
+ * Escritorio con dueño por rol (manager o CEO): el escritorio y la PC de siempre, con silla en vez de banco. La silla
+ * queda reservada (esAsientoReservado) y el webview le pone una placa con el nombre.
+ */
+function escritorioDeRol(m: MuebleRelativo[], rol: string, dx: number, dy: number): void {
+  m.push({ id: `${rol}-escritorio`, type: 'DESK_FRONT', dx, dy });
+  m.push({ id: `${rol}-pc`, type: 'PC_FRONT_OFF', dx: dx + 1, dy });
+  m.push({ id: `${rol}-silla`, type: 'CUSHIONED_CHAIR_BACK', dx: dx + 1, dy: dy + 2 });
+}
+
+/**
+ * Oficina de proyecto: dos filas de tres escritorios con su PC y su banco. El de arriba al centro es el del manager del
+ * proyecto (oficina por niveles): queda vacío hasta que lo lanzan, y los agentes que él lanza se sientan a su lado. Quedan
+ * 5 puestos para las sesiones. Finanzas cambia uno por la mesa contable.
+ */
 function oficina(conMesaContable: boolean): Contenido {
   const m: MuebleRelativo[] = [];
   for (const dy of [0, 3]) {
     for (const dx of [0, 4, 8]) {
+      if (dy === 0 && dx === 4) {
+        escritorioDeRol(m, 'manager', dx, dy);
+        continue;
+      }
       if (conMesaContable && dy === 3 && dx === 8) {
         m.push({ id: 'mesa-contable', type: 'MESA_CONTABLE', dx: 9, dy: 3 });
         continue;
@@ -437,11 +465,18 @@ function oficina(conMesaContable: boolean): Contenido {
   return { muebles: m, puertas: [3, 7] };
 }
 
-/** Brain, en el centro: seis escritorios como una oficina, con plantas y lugar en la pared. */
+/**
+ * Brain, en el centro: la oficina del CEO. Arriba al centro, el escritorio del CEO (adonde va la sesión mientras un
+ * manager trabaja para ella); los otros cinco, como una oficina; plantas y lugar en la pared.
+ */
 function brain(): Contenido {
   const m: MuebleRelativo[] = [];
   for (const dy of [0, 3]) {
     for (const dx of [3, 7, 11]) {
+      if (dy === 0 && dx === 7) {
+        escritorioDeRol(m, 'ceo', dx, dy);
+        continue;
+      }
       const k = `${dy}-${dx}`;
       m.push({ id: `escritorio-${k}`, type: 'DESK_FRONT', dx, dy });
       m.push({ id: `pc-${k}`, type: 'PC_FRONT_OFF', dx: dx + 1, dy });
@@ -476,19 +511,39 @@ function diseno(): Contenido {
   return { muebles: m, puertas: [0, 4] };
 }
 
-/** Biblioteca: bibliotecas en la pared y dos islas de estantes, con la entrada (y el nombre) en el medio. */
+/**
+ * Biblioteca: bibliotecas en la pared a los costados del nombre y una fila de islas de estantes (12 lugares para leer).
+ * Más angosta desde que comparte la franja con la cabina de Contratistas.
+ */
 function biblioteca(): Contenido {
   const m: MuebleRelativo[] = [];
-  for (const dx of [0, 2, 4, 12, 14, 16]) {
+  for (const dx of [0, 8]) {
     m.push({ id: `pared-${dx}`, type: 'DOUBLE_BOOKSHELF', dx, dy: PARED_ARRIBA });
   }
-  for (const dx of [1, 4, 12, 15]) {
+  for (const dx of [0, 3, 6, 8]) {
     m.push({ id: `estante-${dx}`, type: 'DOUBLE_BOOKSHELF', dx, dy: 2 });
   }
-  m.push({ id: 'mesa', type: 'SMALL_TABLE_FRONT', dx: 8, dy: 4 });
   m.push({ id: 'planta-1', type: 'PLANT', dx: 0, dy: 5 });
-  m.push({ id: 'planta-2', type: 'LARGE_PLANT', dx: 16, dy: 4 });
-  return { muebles: m, puertas: [8, 9] };
+  m.push({ id: 'planta-2', type: 'PLANT_2', dx: 9, dy: 5 });
+  return { muebles: m, puertas: [4, 5] };
+}
+
+/**
+ * Contratistas: cabina de los otros motores (Codex, Pi, Antigravity). Cuatro escritorios con silla; no son sesiones de
+ * Claude, así que nadie tiene puesto acá: el webview dibuja a cada uno en su silla con lo que dice Orca
+ * (webview-ui/src/personal/contratistas.ts).
+ */
+function contratistas(): Contenido {
+  const m: MuebleRelativo[] = [];
+  for (const dy of [0, 3]) {
+    for (const dx of [0, 4]) {
+      const k = `${dy}-${dx}`;
+      m.push({ id: `escritorio-${k}`, type: 'DESK_FRONT', dx, dy });
+      m.push({ id: `pc-${k}`, type: 'PC_FRONT_OFF', dx: dx + 1, dy });
+      m.push({ id: `silla-${k}`, type: 'CUSHIONED_CHAIR_BACK', dx: dx + 1, dy: dy + 2 });
+    }
+  }
+  return { muebles: m, puertas: [3] };
 }
 
 /** Reuniones: dos mesas de cuatro sillas y los pizarrones (para planificar). */
@@ -568,6 +623,8 @@ function contenido(p: Pieza): Contenido {
       return cafeteria();
     case 'presentaciones':
       return presentaciones();
+    case 'contratistas':
+      return contratistas();
   }
 }
 
@@ -596,7 +653,8 @@ export function franjas(salas: Sala[]): Pieza[][] {
     .map((sala): Pieza => ({ tipo: 'oficina', sala, ancho: ANCHO_OFICINA }));
   const arriba = [...ofi.slice(0, 2), comun('diseno', SALA_DISENO, 10), ...ofi.slice(2, 4)];
   const medio = [
-    comun('biblioteca', SALA_BIBLIOTECA, 19),
+    comun('contratistas', SALA_CONTRATISTAS, 8),
+    comun('biblioteca', SALA_BIBLIOTECA, 11),
     { tipo: 'brain' as const, sala: brainSala, ancho: 20 },
     comun('reuniones', SALA_REUNIONES, 19),
   ];
@@ -792,7 +850,10 @@ export function recargarOficina(
   const cols = layout.cols as number;
   const areaTiles = layout.areaTiles as Array<string | null>;
   const puestos = (layout.furniture as Mueble[]).filter(
-    (f) => /CHAIR|BENCH/.test(f.type) && !esSalaComun(areaTiles[(f.row + 1) * cols + f.col]),
+    (f) =>
+      /CHAIR|BENCH/.test(f.type) &&
+      !esAsientoReservado(f.uid) &&
+      !esSalaComun(areaTiles[(f.row + 1) * cols + f.col]),
   ).length;
   return { salas: salas.map((s) => s.nombre), puestos };
 }

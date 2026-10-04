@@ -3,7 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { esSalaComun, SALAS_COMUNES } from '../../core/src/salasComunes.js';
+import { esAsientoReservado, esSalaComun, SALAS_COMUNES } from '../../core/src/salasComunes.js';
 import {
   asignacion,
   generarLayout,
@@ -315,6 +315,23 @@ describe('personal: oficina según los proyectos de Orca', () => {
     expect(por.get('Cafetería')).toBeGreaterThanOrEqual(12);
     expect(por.get('Reuniones')).toBe(8);
     expect(por.get('Biblioteca') ?? 0).toBe(0);
+  });
+
+  it('oficina por niveles: un escritorio de manager por oficina, el del CEO en el Brain y la cabina de contratistas', () => {
+    const l = generarLayout(plano, salasDesde(ORCA).salas);
+    const muebles = l.furniture as Mueble[];
+    const sillasDe = (fin: string) =>
+      muebles.filter((f) => f.uid.endsWith(fin)).map((f) => areaDe(l, f.col, f.row));
+    expect(sillasDe('-manager-silla')).toEqual(
+      expect.arrayContaining(['Chaina', 'ERP', 'Finanzas']),
+    );
+    expect(sillasDe('-manager-silla')).not.toContain('Brain');
+    expect(sillasDe('-ceo-silla')).toEqual(['Brain']);
+    expect(
+      muebles.filter((f) => esAsientoReservado(f.uid)).every((f) => f.type.includes('CHAIR')),
+    ).toBe(true);
+    const cabina = muebles.filter((f) => areaDe(l, f.col, f.row + 2) === 'Contratistas');
+    expect(cabina.filter((f) => f.type === 'DESK_FRONT')).toHaveLength(4);
   });
 
   it('con más de 7 proyectos agrega una franja de oficinas abajo, y con pocos no deja huecos', () => {

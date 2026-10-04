@@ -52,6 +52,7 @@ import { ALFA_APAGADO, apagadoPorFiltro } from '../../personal/filtro.js';
 import { renderLuces, renderNoche } from '../../personal/luces.js';
 import { colorModelo, modeloDe } from '../../personal/personal.js';
 import { renderPizarra } from '../../personal/pizarra.js';
+import { renderPlacas } from '../../personal/placas.js';
 import { PisoCacheado } from '../../personal/rendimiento.js';
 import { spritesDeSkin } from '../../personal/skins.js';
 import { getColorizedFloorSprite, hasFloorSprites, WALL_COLOR } from '../floorTiles.js';
@@ -1067,6 +1068,14 @@ export function renderFrame(
   );
 
   if (!editor) renderMicrofonoCentral(ctx, areaTiles, cols, rows, offsetX, offsetY, zoom); // personal: delante del que habla
+  if (!editor)
+    renderPlacas(
+      ctx,
+      offsetX,
+      offsetY,
+      zoom,
+      (sala) => areas?.find((a) => a.label === sala)?.color,
+    ); // personal: CEO y managers
   renderPizarra(ctx, areas, offsetX, offsetY, zoom); // personal: pendientes en la pizarra del Brain
   if (!editor) renderNoche(ctx, areaTiles, cols, rows, offsetX, offsetY, zoom); // personal: luz según la hora
   renderLuces(ctx, areaTiles, cols, offsetX, offsetY, zoom); // personal: deploy y Presentaciones
