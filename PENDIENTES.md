@@ -1,6 +1,6 @@
 # Pendientes
 
-- **Etapa 5 de diseño: hecha el 4/10, falta que Juan la mire** — rincón de lectura en la Biblioteca, alfombras y tele en Reuniones, alfombra del color del proyecto en cada oficina, barra de café (6859956); costo del día en el cartel de cada oficina (274b7b4); informe del manager con clic en su escritorio y semáforo del CEO (de4ca22). Capturas: `~/.claude/relevos/2026-10-04-pixel-captura-etapa5-salas.png`, `e5-semaforo-1.png`, `e5-informe.png`. Lo que queda:
+- **Etapa 5 de diseño: hecha el 4/10.** Juan vio el informe del manager y pidió que se lea mejor (hecho en 1f1e4bb); las salas, el costo y el semáforo siguen sin su OK — rincón de lectura en la Biblioteca, alfombras y tele en Reuniones, alfombra del color del proyecto en cada oficina, barra de café (6859956); costo del día en el cartel de cada oficina (274b7b4); informe del manager con clic en su escritorio y semáforo del CEO (de4ca22). Capturas: `~/.claude/relevos/2026-10-04-pixel-captura-etapa5-salas.png`, `e5-semaforo-1.png`, `e5-informe.png`. Lo que queda:
   - **Costo por oficina:** las sesiones de Pixel cuentan en "Otros" en /hoy.json (el cartel de Pixel no muestra costo). Revisar si `proyectoDe` de hoy.ts usa las reglas de las carpetas nuevas.
   - **Semáforo:** lo leído se guarda en el navegador (localStorage): en otro navegador o en la tele vuelve a titilar hasta que se abra ahí.
   - **Si la oficina se pone lenta:** `/informes` recorre las carpetas `subagents/` de todas las sesiones (Windows y WSL) cada 30 s, sin corte por fecha como hoy.ts. Es lo primero a mirar.
