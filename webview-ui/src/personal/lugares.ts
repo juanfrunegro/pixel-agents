@@ -29,7 +29,14 @@ import type { Direction, PlacedFurniture } from '../office/types.js';
 import { Direction as Dir } from '../office/types.js';
 
 export type Lugar =
-  'biblioteca' | 'pizarron' | 'atril' | 'contable' | 'cafeteria' | 'reunion' | 'presentacion';
+  | 'biblioteca'
+  | 'pizarron'
+  | 'atril'
+  | 'contable'
+  | 'cafeteria'
+  | 'reunion'
+  | 'presentacion'
+  | 'fila'; // esperando su turno para el escenario de Presentaciones
 
 /** Sala de cada lugar; null = donde esté el mueble (la mesa contable, en Finanzas). */
 export const SALA_DE_LUGAR: Record<Lugar, string | null> = {
@@ -40,6 +47,7 @@ export const SALA_DE_LUGAR: Record<Lugar, string | null> = {
   cafeteria: SALA_CAFETERIA,
   reunion: SALA_REUNIONES,
   presentacion: SALA_PRESENTACIONES,
+  fila: SALA_PRESENTACIONES,
 };
 
 const BIBLIOTECA = new Set([

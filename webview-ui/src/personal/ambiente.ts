@@ -4,7 +4,8 @@
  * Regla, en este orden:
  * 1. Sin tokens: se duerme (Zzz) en su escritorio, quieto. No va a la cafetería.
  * 2. Esperando tu PERMISO: no está inactivo, se queda en su escritorio (para que veas quién te necesita).
- * 3. Presentando (se acaba de decir su aviso por voz, ver presentandoDe): va a Presentaciones, frente a la pantalla.
+ * 3. Presentando (dice su aviso por voz, ver presentandoDe): sube al escenario de Presentaciones mientras habla, uno
+ *    por vez; los que avisan mientras otro habla esperan su turno sentados en la sala (enFilaDe).
  * 3b. En una reunión (reuniones.ts): va a una silla de Reuniones, al lado del otro, y cuando llegan hablan.
  * 4. Sin uso (terminó el turno, espera tu próximo mensaje, o una sesión restaurada sin nada en curso; ver enUso en
  *    personal.ts): se va a la Cafetería y se sienta; si no hay sillones libres, se queda parado ahí. Vuelve en cuanto
@@ -41,10 +42,12 @@ import {
 import {
   deployDe,
   dormidoDe,
+  enFilaDe,
   enUso,
   padreDe,
   podarPersonal,
   presentandoDe,
+  setPresentes,
   statusDe,
   vozDe,
 } from './personal.js';
@@ -91,6 +94,7 @@ function puntos(os: OfficeState): Punto[] {
       (col, row) => isWalkable(col, row, os.tileMap, os.blockedTiles),
       puntosDeAsientos(asientos, SALA_PRESENTACIONES, 'presentacion'),
     ),
+    ...puntosDeAsientos(asientos, SALA_PRESENTACIONES, 'fila'),
     ...puntosDeAsientos(asientos, SALA_CAFETERIA, 'cafeteria'),
     ...puntosDePiso(os.walkableTiles, salaDe, SALA_CAFETERIA, 'cafeteria'),
     ...puntosDeAsientos(asientos, SALA_REUNIONES, 'reunion'),
@@ -305,6 +309,9 @@ const PODA_MS = 30_000;
 let ultimaPoda = 0;
 
 export function tickPersonal(os: OfficeState, ahora = Date.now()): void {
+  setPresentes(
+    [...os.characters.values()].filter((c) => c.matrixEffect !== 'despawn').map((c) => c.id),
+  );
   tickReuniones(os, ahora);
   publicarMarvelActivos(os.characters.values(), ahora);
   if (ahora - ultimaPoda > PODA_MS) {
@@ -352,12 +359,16 @@ export function tickPersonal(os: OfficeState, ahora = Date.now()): void {
       continue;
     }
 
-    // 3. Presentando: se acaba de decir su aviso por voz.
+    // 3. Presentando: sube al escenario mientras dice su aviso por voz; si habla otro, espera en la fila.
     if (!ch.isSubagent && presentandoDe(ch.id, ahora)) {
       if (ch.lugar !== 'presentacion') ir(os, ch, 'presentacion', ahora);
       continue;
     }
-    if (ch.lugar === 'presentacion') alEscritorio(ch); // terminó de presentar
+    if (!ch.isSubagent && enFilaDe(ch.id, ahora)) {
+      if (ch.lugar !== 'fila') ir(os, ch, 'fila', ahora);
+      continue;
+    }
+    if (ch.lugar === 'presentacion' || ch.lugar === 'fila') alEscritorio(ch); // terminó de presentar
 
     // 3b. Reunión.
     const r = reunionDe(ch.id, ahora);

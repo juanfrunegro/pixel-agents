@@ -13,6 +13,7 @@ import type { AgentState } from '../types.js';
 import {
   aplicarSenal,
   archivosVoz,
+  duracionDicho,
   escribirOverrideVoz,
   leerOverrideVoz,
   type OverrideVoz,
@@ -416,6 +417,8 @@ interface InfoSesion {
   voz: boolean;
   /** Cuándo se dijo el último aviso por voz (ms). */
   presento?: number;
+  /** Cuánto dura ese aviso (ms, estimado por el hook en <sesión>.dicho); undefined = no se sabe. */
+  presentaMs?: number;
   /** Interruptor puesto desde Pixel (tanda 5): manda sobre el prompt. */
   vozOverride: OverrideVoz;
 }
@@ -561,6 +564,7 @@ export function mensajeInfo(agentId: number, agent: AgentState): Record<string, 
     ...senales,
     voz: info.voz,
     presento: info.presento ?? null,
+    presentaMs: info.presentaMs ?? null,
     vozOverride: info.vozOverride,
     vozActiva: vozActiva(info.voz, info.vozOverride),
   };
@@ -631,7 +635,10 @@ export function revisarSenales(store: AgentStateStore, ahora = Date.now()): void
     if (voz !== info.voz) {
       // La marca desaparece cuando el hook terminó el turno: presenta, salvo que el interruptor estuviera apagado
       // (el hook borra la marca sin hablar).
-      if (!voz && override !== 'off') info.presento = ahora;
+      if (!voz && override !== 'off') {
+        info.presento = ahora;
+        info.presentaMs = undefined;
+      }
       info.voz = voz;
       cambio = true;
     }
@@ -639,7 +646,21 @@ export function revisarSenales(store: AgentStateStore, ahora = Date.now()): void
     const dicho = enCarpeta.has(`${sesion}.dicho`) ? vozDicha(sesion) : null;
     if (dicho !== null && dicho > (info.presento ?? 0) + 15_000 && ahora - dicho < 120_000) {
       info.presento = dicho;
+      info.presentaMs = undefined;
       cambio = true;
+    }
+    // Cuánto dura el aviso (para que suba al escenario mientras habla): del .dicho de ese mismo aviso.
+    if (
+      info.presento !== undefined &&
+      info.presentaMs === undefined &&
+      dicho !== null &&
+      Math.abs(dicho - info.presento) < 15_000
+    ) {
+      const ms = duracionDicho(sesion);
+      if (ms !== null) {
+        info.presentaMs = ms;
+        cambio = true;
+      }
     }
     const r = resumen(info.senales, ahora);
     const ultimo = deployVisto.get(agent);

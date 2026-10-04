@@ -347,6 +347,7 @@ export interface AgentInfo {
   deployDesde?: number | null;
   voz?: boolean;
   presento?: number | null;
+  presentaMs?: number | null;
   vozOverride?: string | null;
   vozActiva?: boolean;
 }
@@ -388,11 +389,11 @@ export interface LugarOficina {
 export interface CandidatoOficina {
   nombre: string;
   ruta: string;
-  origen: AnonymousSchema_231;
+  origen: AnonymousSchema_232;
   modificado: number;
 }
 
-export type AnonymousSchema_231 = 'orca' | 'carpeta' | 'otra';
+export type AnonymousSchema_232 = 'orca' | 'carpeta' | 'otra';
 
 export interface OficinaAsignada {
   type: 'oficinaAsignada';
@@ -406,10 +407,10 @@ export interface SkinsPersonalesLoaded {
 
 export interface ConfigVoz {
   type: 'configVoz';
-  casos: AnonymousSchema_238;
+  casos: AnonymousSchema_239;
 }
 
-export interface AnonymousSchema_238 {
+export interface AnonymousSchema_239 {
   pregunta: boolean;
   permiso: boolean;
   fin_pregunta: boolean;
@@ -555,10 +556,10 @@ export interface RecargarOficina {
 export interface AbrirProyecto {
   type: 'abrirProyecto';
   sala: string;
-  accion: AnonymousSchema_296;
+  accion: AnonymousSchema_297;
 }
 
-export type AnonymousSchema_296 = 'carpeta' | 'vscode';
+export type AnonymousSchema_297 = 'carpeta' | 'vscode';
 
 export interface AsignarOficina {
   type: 'asignarOficina';
@@ -583,11 +584,11 @@ export interface PedirConfigVoz {
 
 export interface SetConfigVoz {
   type: 'setConfigVoz';
-  caso: AnonymousSchema_307;
+  caso: AnonymousSchema_308;
   valor: boolean;
 }
 
-export type AnonymousSchema_307 = 'pregunta' | 'permiso' | 'fin_pregunta' | 'esperando';
+export type AnonymousSchema_308 = 'pregunta' | 'permiso' | 'fin_pregunta' | 'esperando';
 
 export interface PedirApagado {
   type: 'pedirApagado';

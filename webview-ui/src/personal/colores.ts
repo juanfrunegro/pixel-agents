@@ -44,3 +44,10 @@ export const CARTEL_TEXTO = '#e8e6f0';
 export const CARTEL_TEXTO_RESALTADO = '#ffffff';
 export const CARTEL_BORDE = '#3a3a55';
 export const SALA_ACLARADO = '#ffffff';
+
+/** Escenario de Presentaciones (escenario.ts): tarima de madera y micrófonos. */
+export const ESCENARIO_MADERA = '#8a5a34';
+export const ESCENARIO_BORDE = '#5c3a1f';
+export const ESCENARIO_BRILLO = '#b07a4c';
+export const MIC_PIE = '#2b2b33';
+export const MIC_CABEZA = '#b8bcc6';

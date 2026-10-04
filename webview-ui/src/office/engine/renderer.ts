@@ -47,6 +47,7 @@ import {
 } from '../../constants.js';
 import { renderBurbujasPersonales } from '../../personal/burbujas.js';
 import { renderCarteles } from '../../personal/carteles.js';
+import { renderEscenario, renderMicrofonoCentral } from '../../personal/escenario.js';
 import { ALFA_APAGADO, apagadoPorFiltro } from '../../personal/filtro.js';
 import { renderLuces, renderNoche } from '../../personal/luces.js';
 import { colorModelo, modeloDe } from '../../personal/personal.js';
@@ -1030,6 +1031,8 @@ export function renderFrame(
     renderAreaOverlay(ctx, areaTiles, areas, cols, rows, offsetX, offsetY, zoom, activeAreaLabel);
   }
 
+  if (!editor) renderEscenario(ctx, areaTiles, cols, rows, offsetX, offsetY, zoom); // personal: tarima de Presentaciones
+
   // Seat indicators (below furniture/characters, on top of floor)
   if (selection) {
     renderSeatIndicators(
@@ -1063,6 +1066,7 @@ export function renderFrame(
     pets ?? [],
   );
 
+  if (!editor) renderMicrofonoCentral(ctx, areaTiles, cols, rows, offsetX, offsetY, zoom); // personal: delante del que habla
   renderPizarra(ctx, areas, offsetX, offsetY, zoom); // personal: pendientes en la pizarra del Brain
   if (!editor) renderNoche(ctx, areaTiles, cols, rows, offsetX, offsetY, zoom); // personal: luz según la hora
   renderLuces(ctx, areaTiles, cols, offsetX, offsetY, zoom); // personal: deploy y Presentaciones

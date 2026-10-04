@@ -208,6 +208,9 @@ components:
         presento:
           description: Cuándo se dijo su último aviso por voz (ms epoch); null = nunca.
           type: [number, 'null']
+        presentaMs:
+          description: Cuánto dura ese aviso (ms, estimado por el hook por el largo del texto); null = no se sabe.
+          type: [number, 'null']
         vozOverride:
           description: >-
             Interruptor del aviso por voz puesto desde Pixel (sala de comunicaciones o ficha): on = avisa aunque no lo

@@ -240,6 +240,24 @@ export function vozDicha(sesion: string, carpeta = carpetaOverrideVoz()): number
   }
 }
 
+/**
+ * Cuánto dura el último aviso de esa sesión (ms): el hook lo estima por el largo del texto y lo deja en <sesión>.dicho
+ * ({"segundos": n}). null si no está o es de un hook viejo (contenido "1").
+ */
+export function duracionDicho(sesion: string, carpeta = carpetaOverrideVoz()): number | null {
+  if (!sesionValida(sesion)) return null;
+  try {
+    const v = (
+      JSON.parse(fs.readFileSync(path.join(carpeta, `${sesion}.dicho`), 'utf8')) as {
+        segundos?: unknown;
+      }
+    ).segundos;
+    return typeof v === 'number' && v > 0 && v <= 120 ? Math.round(v * 1000) : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Borra interruptores y marcas de "dicho" de sesiones viejas (más de `dias` sin tocar). Lo llama cli.ts al arrancar. */
 export function limpiarVozVieja(
   dias = 3,

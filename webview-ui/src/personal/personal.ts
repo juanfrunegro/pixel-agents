@@ -35,6 +35,8 @@ interface Estado {
       deployDesde?: number | null;
       voz?: boolean;
       presento?: number | null;
+      /** Cuánto dura ese aviso (ms, lo estima el hook); null = no se sabe (PRESENTACION_MS). */
+      presentaMs?: number | null;
       /** Interruptor puesto desde Pixel (tanda 5): on/off, o null = seguir al prompt. */
       vozOverride?: 'on' | 'off' | null;
       /** Va a avisar por voz al terminar el turno (el interruptor manda sobre el prompt). */
@@ -155,6 +157,7 @@ export function alMensaje(msg: any): void {
       deployDesde: typeof msg.deployDesde === 'number' ? msg.deployDesde : null,
       voz: msg.voz === true,
       presento: typeof msg.presento === 'number' ? msg.presento : null,
+      presentaMs: typeof msg.presentaMs === 'number' ? msg.presentaMs : null,
       vozOverride: msg.vozOverride === 'on' || msg.vozOverride === 'off' ? msg.vozOverride : null,
       vozActiva: typeof msg.vozActiva === 'boolean' ? msg.vozActiva : msg.voz === true,
     });
@@ -416,8 +419,12 @@ export const ERRORES_PARA_HUMO = 3;
 export const HUMO_VIGENTE_MS = 15 * 60_000;
 /** Un deploy sin resultado se da por terminado (mismo valor que DEPLOY_MAX_MS del servidor). */
 export const DEPLOY_MAX_MS = 20 * 60_000;
-/** Tiempo que el agente se queda presentando después de que se dijo el aviso por voz. */
-export const PRESENTACION_MS = 60_000;
+/** Cuánto está en el escenario un aviso sin duración (hook viejo); con duración, lo que dure el aviso. */
+export const PRESENTACION_MS = 12_000;
+/** Tope de un aviso en el escenario (una duración rara no lo deja arriba para siempre). */
+export const PRESENTACION_MAX_MS = 90_000;
+/** Un aviso que lleva esto esperando turno ya no se cuenta (la fila no crece con avisos viejos). */
+const FILA_MAX_MS = 3 * 60_000;
 
 function infoSesion(charId: number) {
   const s = estado.subs.get(charId);
@@ -459,11 +466,71 @@ export function vozOverrideDe(charId: number): 'on' | 'off' | null {
   return estado.info.get(charId)?.vozOverride ?? null;
 }
 
-/** Se acaba de decir el aviso por voz de esta sesión: está presentando. */
+/**
+ * Turnos del escenario de Presentaciones: uno por vez, en orden de llegada. Cada aviso sube cuando le toca y se queda lo
+ * que dura (presentaMs, o PRESENTACION_MS si no se sabe); los que llegaron después esperan en la fila.
+ */
+export function turnosEscenario(
+  avisos: Array<{ id: number; desde: number; ms: number | null }>,
+  ahora: number,
+): Map<number, 'escenario' | 'fila'> {
+  const turnos = new Map<number, 'escenario' | 'fila'>();
+  let libreDesde = -Infinity;
+  for (const a of [...avisos].sort((x, y) => x.desde - y.desde || x.id - y.id)) {
+    if (a.desde > ahora) continue;
+    const inicio = Math.max(a.desde, libreDesde);
+    const fin = inicio + Math.min(a.ms ?? PRESENTACION_MS, PRESENTACION_MAX_MS);
+    libreDesde = fin;
+    if (ahora >= fin) continue;
+    if (ahora >= inicio) turnos.set(a.id, 'escenario');
+    else if (ahora - a.desde < FILA_MAX_MS) turnos.set(a.id, 'fila');
+  }
+  return turnos;
+}
+
+let turnosCache: {
+  ahora: number;
+  version: number;
+  turnos: Map<number, 'escenario' | 'fila'>;
+} | null = null;
+/** Personajes que están en la oficina (lo pone tickPersonal en cada cuadro): solo ellos ocupan el escenario. */
+let presentes: Set<number> | null = null;
+let versionPresentes = 0;
+
+export function setPresentes(ids: Iterable<number>): void {
+  const nuevos = new Set(ids);
+  if (presentes && nuevos.size === presentes.size && [...nuevos].every((id) => presentes!.has(id)))
+    return;
+  presentes = nuevos;
+  versionPresentes++;
+}
+
+function turnosAhora(ahora: number): Map<number, 'escenario' | 'fila'> {
+  const v = estado.version * 1e6 + versionPresentes;
+  if (turnosCache && turnosCache.ahora === ahora && turnosCache.version === v)
+    return turnosCache.turnos;
+  const avisos: Array<{ id: number; desde: number; ms: number | null }> = [];
+  for (const [id, i] of estado.info) {
+    if (estado.subs.has(id) || typeof i.presento !== 'number') continue;
+    if (presentes && !presentes.has(id)) continue;
+    if (ahora - i.presento > FILA_MAX_MS + PRESENTACION_MAX_MS) continue;
+    avisos.push({ id, desde: i.presento, ms: i.presentaMs ?? null });
+  }
+  const turnos = turnosEscenario(avisos, ahora);
+  turnosCache = { ahora, version: v, turnos };
+  return turnos;
+}
+
+/** Está en el escenario de Presentaciones: es su turno de decir el aviso por voz. */
 export function presentandoDe(charId: number, ahora = Date.now()): boolean {
   if (estado.subs.has(charId)) return false;
-  const p = estado.info.get(charId)?.presento;
-  return typeof p === 'number' && ahora - p >= 0 && ahora - p < PRESENTACION_MS;
+  return turnosAhora(ahora).get(charId) === 'escenario';
+}
+
+/** Dijo su aviso pero otro está en el escenario: espera su turno sentado en la fila. */
+export function enFilaDe(charId: number, ahora = Date.now()): boolean {
+  if (estado.subs.has(charId)) return false;
+  return turnosAhora(ahora).get(charId) === 'fila';
 }
 
 /** Sesión de WSL (otra cuenta): sus sub-agentes también. */
