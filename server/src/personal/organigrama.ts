@@ -150,7 +150,11 @@ export function htmlOrganigrama(
   const areasConfig =
     n.areas && typeof n.areas === 'object' ? (n.areas as Record<string, string[]>) : AREAS;
   const areas = new Map<string, string[]>();
-  const ubicadas = new Set<string>([ceo]);
+  // Managers de proyecto (`manager-<proyecto>`): van en su propia capa, entre el CEO y las áreas.
+  const managers = [...defs.keys()].filter((k) => k.startsWith('manager-')).sort();
+  const personaDeAgente = (interno: string): string =>
+    n.agentes[interno] ? personaDe(n.agentes[interno]) : '';
+  const ubicadas = new Set<string>([ceo, ...managers.map(personaDeAgente).filter(Boolean)]);
   for (const [area, personas] of Object.entries(areasConfig)) {
     const hay = (Array.isArray(personas) ? personas : []).filter((p) => equipo.has(p));
     hay.forEach((p) => ubicadas.add(p));
@@ -183,6 +187,32 @@ export function htmlOrganigrama(
     return `<div class="puesto"><div class="jefe">${avatar(p, orden, true)}<div><b>${esc(p)}</b><span class="rol">${esc(roles[p] ?? '')}</span></div></div>
       ${internos.length ? `<ul>${internos.map((i) => agente(i, p)).join('')}</ul>` : '<p class="vac">Puesto sin agente todavía</p>'}</div>`;
   };
+
+  const miembro = (interno: string): string => {
+    const d = defs.get(interno);
+    const nombre = n.agentes[interno] ?? interno;
+    const p = personaDeAgente(interno);
+    const origen = !d
+      ? 'no está definido'
+      : d.proyecto === 'Todos'
+        ? 'global'
+        : `propio · ${d.proyecto}`;
+    return `<li class="mi">${p ? avatar(p, orden) : ''}<div><b>${esc(nombre)}</b><span class="int">${esc(interno)} · ${esc(origen)}</span></div></li>`;
+  };
+  const proyectos = managers.length
+    ? `<section class="proyectos"><h2>Proyectos</h2><p class="rol">Cada manager reparte el trabajo de su proyecto, revisa con evidencia y responde ante el CEO. Su equipo sale de la línea <code>tools: Agent(…)</code> de su archivo: solo puede lanzar a esos.</p><div class="pys">${managers
+        .map((m) => {
+          const d = defs.get(m)!;
+          const p = personaDeAgente(m);
+          const equipoM = d.equipo ?? [];
+          return `<div class="py"><h3>${esc(d.proyecto)}</h3><ul>${agente(m, p)}</ul>${
+            equipoM.length
+              ? `<ul class="eq">${equipoM.map(miembro).join('')}</ul>`
+              : '<p class="vac">Sin equipo: le falta Agent(…) en tools</p>'
+          }</div>`;
+        })
+        .join('')}</div></section>`
+    : '';
 
   const bloques = [...areas.entries()]
     .map(
@@ -225,12 +255,17 @@ ul{list-style:none;margin:0 0 0 22px;padding:0 0 0 12px;border-left:2px solid #3
 .mv div{display:grid;gap:2px}.mv b{font-size:16px}
 .est{font-size:11px;font-weight:700;justify-self:start;padding:0 6px;border-radius:3px;background:#3a4050;color:#c9cdd6}
 .mv.on{border-left:4px solid #4cb36a}.mv.on .est{background:#4cb36a;color:#111}
+.proyectos{margin:0 0 28px;background:#1f222b;border:1px solid #e8832a55;border-radius:6px;padding:14px 12px;position:relative}
+.proyectos:after{content:"";position:absolute;bottom:-29px;left:50%;height:28px;border-left:2px solid #3a4050}
+.pys{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:14px;margin-top:10px}
+.py{display:grid;gap:8px;align-content:start}.py h3{margin:0;font-size:17px}
+.mi{display:flex;gap:8px;align-items:center;padding:12px 8px 4px 6px;background:#262a35;border-radius:3px}.mi div{display:grid;gap:2px;min-width:0}
 .chip{font-size:11px;font-weight:700;color:#111;padding:0 6px;border-radius:3px;white-space:nowrap}.chip.wsl{background:${COLOR_WSL};color:#fff}.vac{margin:0 0 0 34px;color:#9ba2b0;font-size:13px}
 </style></head><body><h1>Organigrama de agentes</h1>
 <p class="sub">Armado en vivo con nombres.json, la definición de cada agente y el registro de rendimiento. Cada persona tiene su personaje, el mismo que usa en la oficina. Para cambiar un nombre: ficha del agente en la oficina o ~/.claude/agents/nombres.json (ahí también se cambian las áreas, con la clave "areas").</p>
 <div class="ley"><span><i style="background:#e8832a"></i>Opus</span><span><i style="background:#3b9bd6"></i>Sonnet</span><span><i style="background:#a463e0"></i>Fable</span><span><i style="background:#4cb36a"></i>Haiku</span><span><i style="background:#9aa0ab"></i>hereda del que lo lanza</span><span><i style="background:${COLOR_WSL}"></i>WSL: corre en WSL con la cuenta Max (el resto, en Windows con la Pro)</span></div>
 <div class="ceo"><div class="tarjeta">${avatar(ceo, orden, true)}<div><b>${esc(n.ceo)}</b><span class="rol">${esc(roles[ceo] ?? 'CEO')}</span><br><span class="int">sesión principal · en la oficina cada sesión tiene su propio personaje</span></div></div></div>
-<main>${bloques}${sin}</main>${seccionExternos(orden)}</body></html>`;
+${proyectos}<main>${bloques}${sin}</main>${seccionExternos(orden)}</body></html>`;
 }
 
 /** Ruta GET /organigrama: solo con el token de la oficina (muestra información de los negocios). */

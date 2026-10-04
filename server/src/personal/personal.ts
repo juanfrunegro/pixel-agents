@@ -152,6 +152,8 @@ export interface Definicion {
   descripcion?: string;
   archivo: string;
   proyecto: string;
+  /** Agentes que puede lanzar (de `tools: Agent(a, b)`): el equipo de un manager. */
+  equipo?: string[];
 }
 
 let indice: Map<string, Definicion> | null = null;
@@ -179,6 +181,16 @@ export function carpetasDeAgentes(): Array<{ dir: string; proyecto: string }> {
   return dirs;
 }
 
+/** `Read, Agent(a, b)` → ['a', 'b']; sin `Agent(...)` (o `Agent` a secas) no hay equipo. */
+export function equipoDe(tools: string | undefined): string[] | undefined {
+  const lista = tools && /Agent\(([^)]*)\)/.exec(tools)?.[1];
+  return lista
+    ? lista
+        .split(',')
+        .map((x) => x.trim())
+        .filter(Boolean)
+    : undefined;
+}
 function campo(frontmatter: string, nombre: string): string | undefined {
   const m = new RegExp(`^${nombre}:\\s*(.+?)\\s*$`, 'm').exec(frontmatter);
   return m ? m[1].replace(/^['"]|['"]$/g, '') : undefined;
@@ -205,6 +217,7 @@ export function definiciones(): Map<string, Definicion> {
           modelo: campo(fm, 'model'),
           esfuerzo: campo(fm, 'effort'),
           descripcion: campo(fm, 'description'),
+          equipo: equipoDe(campo(fm, 'tools')),
           archivo: path.join(dir, f),
           proyecto,
         });

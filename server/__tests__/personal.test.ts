@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { htmlOrganigrama, registrarOrganigrama } from '../src/personal/organigrama.js';
 import {
   costoUsd,
+  equipoDe,
   esDeWsl,
   limiteDe,
   metaDeSubagente,
@@ -35,6 +36,49 @@ describe('personal: proyecto de cada agente (áreas)', () => {
 });
 
 describe('personal: organigrama', () => {
+  it('capa de proyectos: cada manager con su equipo sacado de tools: Agent(…), fuera de las áreas', () => {
+    const html = htmlOrganigrama({
+      nombres: {
+        ceo: 'Juan',
+        roles: { Juan: 'CEO', Rulo: 'Manager del ERP', Jere: 'Contabilidad' },
+        agentes: {
+          'manager-erp': 'Rulo · manager ERP',
+          'conciliador-cobros': 'Jere · cobros',
+          verificador: 'Pepe · verificador',
+        },
+        descartables: [],
+      },
+      defs: new Map([
+        [
+          'manager-erp',
+          {
+            modelo: 'sonnet',
+            archivo: 'm.md',
+            proyecto: 'ERP',
+            equipo: equipoDe('Read, Grep, Agent(conciliador-cobros, verificador, fantasma)'),
+          },
+        ],
+        ['conciliador-cobros', { modelo: 'sonnet', archivo: 'b.md', proyecto: 'ERP' }],
+        ['verificador', { modelo: 'sonnet', archivo: 'v.md', proyecto: 'Todos' }],
+      ]),
+      uso: new Map(),
+    });
+    const pos = (t: string) => html.indexOf(t);
+    const capa = html.slice(pos('<section class="proyectos">'), pos('<main>'));
+    expect(pos('<section class="proyectos">')).toBeGreaterThan(pos('class="ceo"'));
+    expect(capa).toContain('<h3>ERP</h3>');
+    expect(capa).toContain('<b>manager ERP</b>');
+    expect(capa).toContain('Jere · cobros</b><span class="int">conciliador-cobros · propio · ERP');
+    expect(capa).toContain('verificador · global');
+    expect(capa).toContain('fantasma · no está definido');
+    // La persona del manager no se repite en las áreas.
+    expect(html.slice(pos('<main>'))).not.toContain('<b>Rulo</b>');
+  });
+  it('equipoDe: lee la lista de Agent(…) y nada más', () => {
+    expect(equipoDe('Read, Agent(a, b ,c)')).toEqual(['a', 'b', 'c']);
+    expect(equipoDe('Read, Grep')).toBeUndefined();
+    expect(equipoDe(undefined)).toBeUndefined();
+  });
   it('arma una página aunque no haya nombres ni agentes', () => {
     expect(htmlOrganigrama()).toContain('<title>Organigrama de agentes</title>');
   });
