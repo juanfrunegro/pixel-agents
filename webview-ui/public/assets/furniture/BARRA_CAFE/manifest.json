@@ -1,0 +1,13 @@
+{
+  "id": "BARRA_CAFE",
+  "name": "Barra de café",
+  "category": "misc",
+  "type": "asset",
+  "canPlaceOnWalls": false,
+  "canPlaceOnSurfaces": false,
+  "backgroundTiles": 1,
+  "footprintW": 4,
+  "footprintH": 2,
+  "width": 64,
+  "height": 32
+}

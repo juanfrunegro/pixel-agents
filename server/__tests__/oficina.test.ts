@@ -314,7 +314,7 @@ describe('personal: oficina según los proyectos de Orca', () => {
     expect(por.get('Finanzas')).toBe(5); // un escritorio menos: la mesa contable
     expect(por.get('Cafetería')).toBeGreaterThanOrEqual(12);
     expect(por.get('Reuniones')).toBe(8);
-    expect(por.get('Biblioteca') ?? 0).toBe(0);
+    expect(por.get('Biblioteca')).toBe(2); // el sillón del rincón de lectura
   });
 
   it('oficina por niveles: un escritorio de manager por oficina, el del CEO en el Brain y la cabina de contratistas', () => {

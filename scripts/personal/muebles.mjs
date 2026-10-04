@@ -326,8 +326,133 @@ function minibar() {
   });
 }
 
+// ── Reuniones ─────────────────────────────────────────────────────
+
+/** Tele de videollamada (3×2, en la pared): pantalla con cuatro caras en grilla, cámara arriba y luz de encendido. */
+function tele() {
+  const { png, px, rect, caja } = lienzo(48, 32);
+  // Marco negro y pantalla.
+  caja(1, 3, 46, 25, C.vidrio, C.negro);
+  rect(2, 4, 44, 1, '#3a4654');
+  // Cámara arriba al centro.
+  rect(22, 1, 4, 2, C.negro);
+  px(23, 2, C.verde);
+  // Cuatro participantes: fondo de color, cabeza y hombros.
+  const piel = ['#f1c27d', '#c68642', '#e0ac69', '#8d5524'];
+  const pelo = ['#3b2a1a', '#1c1c1c', '#a0522d', '#2b1d0e'];
+  const fondo = ['#3f5a7a', '#5a3f6e', '#3f6e5a', '#6e5a3f'];
+  [
+    [3, 5],
+    [24, 5],
+    [3, 16],
+    [24, 16],
+  ].forEach(([x, y], k) => {
+    rect(x, y, 21, 10, fondo[k]);
+    rect(x + 8, y + 2, 5, 5, piel[k]);
+    rect(x + 8, y + 2, 5, 2, pelo[k]);
+    rect(x + 6, y + 7, 9, 3, C.papel);
+    if (k === 1) rect(x, y, 21, 1, C.verde); // el que habla
+  });
+  // Barra de la llamada abajo: micrófono, cámara y colgar.
+  rect(18, 26, 12, 1, '#00000080');
+  px(20, 26, C.papel);
+  px(24, 26, C.papel);
+  rect(27, 26, 2, 1, C.rojo);
+  // Luz de encendido.
+  px(44, 27, C.verde);
+  guardar('TELE', png, {
+    name: 'Tele de videollamada',
+    category: 'wall',
+    type: 'asset',
+    canPlaceOnWalls: true,
+    canPlaceOnSurfaces: false,
+    backgroundTiles: 0,
+    footprintW: 3,
+    footprintH: 2,
+  });
+}
+
+// ── Cafetería ─────────────────────────────────────────────────────
+
+/**
+ * Barra de café (4×2): mesada de madera clara con la cafetera espresso (acero y manómetro), el molinillo, tazas
+ * apiladas y una campana con medialunas; adelante, el frente de madera con una pizarrita del menú.
+ */
+function barraCafe() {
+  const { png, px, rect, caja } = lienzo(64, 32);
+  // Mesada.
+  caja(0, 14, 64, 5, C.maderaClara);
+  rect(1, 15, 62, 1, C.maderaBrillo);
+  rect(1, 18, 62, 1, C.maderaOscura);
+  // Cafetera espresso: cuerpo de acero, manómetro, dos grupos con portafiltro y una taza abajo.
+  caja(4, 2, 18, 13, C.acero);
+  rect(5, 3, 16, 1, '#ffffff');
+  rect(5, 4, 1, 9, '#ffffff');
+  caja(11, 4, 5, 5, C.papel, C.aceroOscuro);
+  px(13, 6, C.rojo);
+  px(14, 5, C.rojo);
+  for (const x of [7, 17]) {
+    rect(x, 10, 3, 2, C.aceroOscuro);
+    rect(x - 1, 12, 5, 1, C.negro);
+  }
+  rect(7, 13, 3, 2, C.papel);
+  px(10, 13, C.papel);
+  // Vapor.
+  for (const [x, y] of [
+    [8, 0],
+    [9, 1],
+    [18, 0],
+  ])
+    px(x, y, '#ffffffa0');
+  // Molinillo: tolva de vidrio con granos y base negra.
+  caja(25, 3, 6, 6, C.vidrio, C.negro);
+  rect(26, 6, 4, 2, C.maderaOscura);
+  caja(25, 9, 6, 6, C.gris, C.negro);
+  // Tazas apiladas.
+  for (const [x, y] of [
+    [34, 10],
+    [38, 10],
+    [36, 7],
+  ]) {
+    caja(x, y, 4, 4, C.papel, C.gris);
+    px(x + 4, y + 1, C.gris);
+  }
+  // Campana de vidrio con medialunas.
+  caja(45, 5, 14, 9, '#d8e8ec80', C.aceroOscuro);
+  px(51, 4, C.aceroOscuro);
+  px(52, 4, C.aceroOscuro);
+  for (const x of [47, 52]) {
+    rect(x, 10, 5, 3, C.naranja);
+    rect(x + 1, 10, 3, 1, C.amarillo);
+  }
+  rect(45, 13, 14, 1, C.acero);
+  // Frente de la barra: madera oscura con paneles y una pizarrita del menú.
+  caja(0, 19, 64, 12, C.maderaOscura);
+  rect(1, 20, 62, 1, C.madera);
+  for (const x of [3, 41]) caja(x, 22, 20, 7, C.madera, C.bordo);
+  caja(25, 21, 14, 9, C.gris, C.madera);
+  rect(27, 23, 6, 1, C.papel);
+  rect(27, 25, 9, 1, C.papel);
+  rect(27, 27, 5, 1, C.papel);
+  px(35, 23, C.dorado);
+  // Sombra en el piso.
+  rect(0, 31, 64, 1, '#00000040');
+  guardar('BARRA_CAFE', png, {
+    name: 'Barra de café',
+    category: 'misc',
+    type: 'asset',
+    canPlaceOnWalls: false,
+    canPlaceOnSurfaces: false,
+    backgroundTiles: 1,
+    footprintW: 4,
+    footprintH: 2,
+  });
+}
+
 mesaLuz();
 mural();
 sillonCeo();
 lampara();
 minibar();
+tele();
+barraCafe();

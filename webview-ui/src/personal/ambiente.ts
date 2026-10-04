@@ -24,6 +24,7 @@ import {
   esAsientoReservado,
   esSillaCeo,
   esSillaManager,
+  SALA_BIBLIOTECA,
   SALA_CAFETERIA,
   SALA_PRESENTACIONES,
   SALA_REUNIONES,
@@ -110,6 +111,7 @@ function puntos(os: OfficeState): Punto[] {
     ...puntosDeAsientos(asientos, SALA_CAFETERIA, 'cafeteria'),
     ...puntosDePiso(os.walkableTiles, salaDe, SALA_CAFETERIA, 'cafeteria'),
     ...puntosDeAsientos(asientos, SALA_REUNIONES, 'reunion'),
+    ...puntosDeAsientos(asientos, SALA_BIBLIOTECA, 'biblioteca'),
   ];
   cache = { furniture: layout.furniture, blocked: os.blockedTiles, seats: os.seats, puntos: p };
   return p;

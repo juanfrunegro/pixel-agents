@@ -456,6 +456,22 @@ const tono = (h: number, s: number, b: number, c = 0): ColorAlfombra => ({
 
 const PARED_ARRIBA = -2;
 
+/** Filete dorado de todas las alfombras. */
+const DORADO = tono(45, 70, 10);
+
+/** Tono (0–360) de un color #rrggbb; null si no es un color así. */
+export function tonoDe(hex: string): number | null {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex);
+  if (!m) return null;
+  const n = parseInt(m[1], 16);
+  const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => v / 255);
+  const max = Math.max(r, g, b);
+  const d = max - Math.min(r, g, b);
+  if (d === 0) return 0;
+  const h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return Math.round((h * 60 + 360) % 360);
+}
+
 /**
  * Escritorio con dueño por rol (manager o CEO): el escritorio y la PC de siempre, con silla en vez de banco. La silla
  * queda reservada (esAsientoReservado) y el webview le pone una placa con el nombre.
@@ -475,9 +491,10 @@ function escritorioDeRol(
 /**
  * Oficina de proyecto: dos filas de tres escritorios con su PC y su banco. El de arriba al centro es el del manager del
  * proyecto (oficina por niveles): queda vacío hasta que lo lanzan, y los agentes que él lanza se sientan a su lado. Quedan
- * 5 puestos para las sesiones. Finanzas cambia uno por la mesa contable.
+ * 5 puestos para las sesiones. Finanzas cambia uno por la mesa contable. Bajo el escritorio del manager, una alfombra
+ * del color del proyecto (las oficinas libres y Otros no tienen).
  */
-function oficina(conMesaContable: boolean): Contenido {
+function oficina(conMesaContable: boolean, color: string | null): Contenido {
   const m: MuebleRelativo[] = [];
   for (const dy of [0, 3]) {
     for (const dx of [0, 4, 8]) {
@@ -499,7 +516,12 @@ function oficina(conMesaContable: boolean): Contenido {
   m.push({ id: 'reloj', type: 'CLOCK', dx: 0, dy: PARED_ARRIBA });
   m.push({ id: 'cuadro-1', type: 'SMALL_PAINTING', dx: 9, dy: PARED_ARRIBA });
   m.push({ id: 'cuadro-2', type: 'SMALL_PAINTING_2', dx: 10, dy: PARED_ARRIBA });
-  return { muebles: m, puertas: [3, 7] };
+  const h = color && color !== COLOR_LIBRE ? tonoDe(color) : null;
+  const alfombras: Alfombra[] =
+    h === null
+      ? []
+      : [{ dx: 3, dy: 0, w: 5, h: 3, variant: 0, color: tono(h, 55, -58), accentColor: DORADO }];
+  return { muebles: m, puertas: [3, 7], alfombras };
 }
 
 /**
@@ -550,7 +572,7 @@ function brain(): Contenido {
         h: 3,
         variant: 0,
         color: tono(135, 75, -40),
-        accentColor: tono(45, 70, 10),
+        accentColor: DORADO,
       },
     ],
   };
@@ -582,7 +604,7 @@ function diseno(): Contenido {
         h: 5,
         variant: 0,
         color: tono(300, 45, -25),
-        accentColor: tono(45, 70, 10),
+        accentColor: DORADO,
       },
     ],
   };
@@ -590,7 +612,8 @@ function diseno(): Contenido {
 
 /**
  * Biblioteca: bibliotecas en la pared a los costados del nombre y una fila de islas de estantes (12 lugares para leer).
- * Más angosta desde que comparte la franja con la cabina de Contratistas.
+ * Más angosta desde que comparte la franja con la cabina de Contratistas. Abajo, un rincón de lectura: sillón sobre una
+ * alfombra con lámpara de pie (el sillón también es lugar para leer, ver webview-ui/src/personal/ambiente.ts).
  */
 function biblioteca(): Contenido {
   const m: MuebleRelativo[] = [];
@@ -602,7 +625,15 @@ function biblioteca(): Contenido {
   }
   m.push({ id: 'planta-1', type: 'PLANT', dx: 0, dy: 5 });
   m.push({ id: 'planta-2', type: 'PLANT_2', dx: 9, dy: 5 });
-  return { muebles: m, puertas: [4, 5] };
+  m.push({ id: 'sillon-lectura', type: 'SOFA_FRONT', dx: 3, dy: 5 });
+  m.push({ id: 'lampara', type: 'LAMPARA', dx: 5, dy: 4 });
+  return {
+    muebles: m,
+    puertas: [4, 5],
+    alfombras: [
+      { dx: 2, dy: 5, w: 5, h: 2, variant: 0, color: tono(150, 50, -50), accentColor: DORADO },
+    ],
+  };
 }
 
 /**
@@ -623,13 +654,26 @@ function contratistas(): Contenido {
   return { muebles: m, puertas: [3] };
 }
 
-/** Reuniones: dos mesas de cuatro sillas y los pizarrones (para planificar). */
+/**
+ * Reuniones: dos mesas de cuatro sillas, cada una sobre su alfombra, los pizarrones (para planificar) y una tele de
+ * videollamada en la pared.
+ */
 function reuniones(): Contenido {
   const m: MuebleRelativo[] = [];
+  const alfombras: Alfombra[] = [];
   for (const [n, tx] of [
     [1, 2],
     [2, 9],
   ] as const) {
+    alfombras.push({
+      dx: tx - 1,
+      dy: 1,
+      w: 5,
+      h: 5,
+      variant: 0,
+      color: tono(220, 55, -45),
+      accentColor: DORADO,
+    });
     m.push({ id: `mesa-${n}`, type: 'TABLE_FRONT', dx: tx, dy: 1 });
     m.push({ id: `silla-${n}-1`, type: 'WOODEN_CHAIR_SIDE', dx: tx - 1, dy: 1 });
     m.push({ id: `silla-${n}-2`, type: 'WOODEN_CHAIR_SIDE', dx: tx - 1, dy: 3 });
@@ -639,13 +683,14 @@ function reuniones(): Contenido {
   }
   m.push({ id: 'pizarron-1', type: 'WHITEBOARD', dx: 14, dy: PARED_ARRIBA });
   m.push({ id: 'pizarron-2', type: 'WHITEBOARD', dx: 16, dy: PARED_ARRIBA });
-  m.push({ id: 'reloj', type: 'CLOCK', dx: 3, dy: PARED_ARRIBA });
-  m.push({ id: 'planta-colgante', type: 'HANGING_PLANT', dx: 1, dy: PARED_ARRIBA });
+  m.push({ id: 'reloj', type: 'CLOCK', dx: 2, dy: PARED_ARRIBA });
+  m.push({ id: 'planta-colgante', type: 'HANGING_PLANT', dx: 0, dy: PARED_ARRIBA });
   m.push({ id: 'planta', type: 'LARGE_PLANT', dx: 15, dy: 3 });
-  return { muebles: m, puertas: [6, 13] };
+  m.push({ id: 'tele', type: 'TELE', dx: 3, dy: PARED_ARRIBA });
+  return { muebles: m, puertas: [6, 13], alfombras };
 }
 
-/** Cafetería: dos livings (sillones alrededor de una mesa ratona con café) y una mesita. */
+/** Cafetería: dos livings (sillones alrededor de una mesa ratona con café), una mesita y la barra con la cafetera. */
 function cafeteria(): Contenido {
   const m: MuebleRelativo[] = [];
   for (const [n, cx] of [
@@ -662,6 +707,7 @@ function cafeteria(): Contenido {
   m.push({ id: 'mesita', type: 'SMALL_TABLE_FRONT', dx: 1, dy: 5 });
   m.push({ id: 'cafe-mesita', type: 'COFFEE', dx: 2, dy: 6 });
   m.push({ id: 'planta', type: 'PLANT_2', dx: 9, dy: 5 });
+  m.push({ id: 'barra', type: 'BARRA_CAFE', dx: 4, dy: 5 });
   m.push({ id: 'cuadro', type: 'SMALL_PAINTING_2', dx: 0, dy: PARED_ARRIBA });
   m.push({ id: 'cuadro-grande', type: 'LARGE_PAINTING', dx: 8, dy: PARED_ARRIBA });
   return { muebles: m, puertas: [5, 10] };
@@ -697,7 +743,7 @@ function presentaciones(): Contenido {
         h: 3,
         variant: 0,
         color: tono(345, 70, -55),
-        accentColor: tono(45, 70, 10),
+        accentColor: DORADO,
       },
     ],
   };
@@ -706,7 +752,7 @@ function presentaciones(): Contenido {
 function contenido(p: Pieza): Contenido {
   switch (p.tipo) {
     case 'oficina':
-      return oficina(p.sala.nombre === 'Finanzas');
+      return oficina(p.sala.nombre === 'Finanzas', p.sala.nombre === 'Otros' ? null : p.sala.color);
     case 'brain':
       return brain();
     case 'diseno':
