@@ -7,6 +7,9 @@
  * sub-agente vivo (tampoco en segundo plano) y así sigue CALMA_MS (un sub-agente en segundo plano que termina hace que
  * la sesión retome enseguida). Avisa una sola vez: después borra la marca.
  *
+ * Por proyecto (menú de su oficina): ~/.pixel-agents/whatsapp/proyectos/<proyecto>.on. Avisa cuando todas las sesiones
+ * y agentes de ese proyecto están quietos (la misma regla, para cada uno) y así siguen CALMA_MS; también una sola vez.
+ *
  * Manda con comando-voz/avisar_whatsapp.py (plantilla aviso_mochi de Meta; si no está aprobada, alerta_sistema marcada
  * "[Mochi, no es del ERP]"). Con PIXEL_WHATSAPP_PRUEBA=1 no manda: lo anota en el log.
  */
@@ -15,6 +18,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 
+import { esOficinaLibre } from '../../../core/src/salasComunes.js';
 import { sesionValida } from './senales.js';
 
 /** Cuánto tiene que seguir quieta la sesión para darla por terminada. */
@@ -75,8 +79,13 @@ export class EsperaDeFin {
 
   /** `trabajoDespues`: la sesión escribió algo después de pedir el aviso (si no, avisaría por un turno viejo). */
   revisar(sesion: string, s: EstadoSesion, ahora: number, trabajoDespues = true): boolean {
+    return this.revisarQuieto(sesion, quieta(s), ahora, trabajoDespues);
+  }
+
+  /** Lo mismo con el "quieto" ya calculado (un proyecto: todas sus sesiones). */
+  revisarQuieto(sesion: string, quieto: boolean, ahora: number, trabajoDespues = true): boolean {
     if (!trabajoDespues) return false;
-    if (!quieta(s)) {
+    if (!quieto) {
       this.desde.delete(sesion);
       return false;
     }
@@ -92,6 +101,111 @@ export class EsperaDeFin {
 
   olvidar(sesion: string): void {
     this.desde.delete(sesion);
+  }
+
+  soloEstas(claves: ReadonlySet<string>): void {
+    for (const k of [...this.desde.keys()]) if (!claves.has(k)) this.desde.delete(k);
+  }
+}
+
+// ── Por proyecto ──────────────────────────────────────────────
+
+/** Un nombre de proyecto que puede tener marca: el de una oficina con proyecto (no "Libre 3" ni "Otros"). */
+export function proyectoValido(proyecto: unknown): proyecto is string {
+  return (
+    typeof proyecto === 'string' &&
+    proyecto.length > 0 &&
+    proyecto.length <= 80 &&
+    proyecto.trim() === proyecto &&
+    proyecto !== 'Otros' &&
+    !esOficinaLibre(proyecto)
+  );
+}
+
+/** El nombre va codificado: puede tener espacios o caracteres que no van en un archivo (nunca "/" ni "\"). */
+function archivoProyecto(proyecto: string, carpeta: string): string {
+  const nombre = encodeURIComponent(proyecto).replace(
+    /[*!'()~]/g,
+    (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
+  return path.join(carpeta, 'proyectos', `${nombre}.on`);
+}
+
+/** Prende o apaga el aviso de un proyecto. false si el proyecto o el valor no son válidos. */
+export function escribirWhatsappProyecto(
+  proyecto: unknown,
+  valor: unknown,
+  carpeta = carpetaWhatsapp(),
+): boolean {
+  if (!proyectoValido(proyecto) || typeof valor !== 'boolean') return false;
+  const archivo = archivoProyecto(proyecto, carpeta);
+  if (valor) {
+    fs.mkdirSync(path.dirname(archivo), { recursive: true });
+    fs.writeFileSync(archivo, String(Date.now()), 'utf8');
+  } else {
+    fs.rmSync(archivo, { force: true });
+  }
+  return true;
+}
+
+/** Proyectos con el aviso prendido y desde cuándo (mtime de la marca, ms). */
+export function proyectosConWhatsapp(carpeta = carpetaWhatsapp()): Map<string, number> {
+  const out = new Map<string, number>();
+  let archivos: string[];
+  try {
+    archivos = fs.readdirSync(path.join(carpeta, 'proyectos'));
+  } catch {
+    return out;
+  }
+  for (const a of archivos) {
+    if (!a.endsWith('.on')) continue;
+    let proyecto: string;
+    try {
+      proyecto = decodeURIComponent(a.slice(0, -3));
+    } catch {
+      continue;
+    }
+    if (!proyectoValido(proyecto)) continue;
+    try {
+      out.set(proyecto, fs.statSync(path.join(carpeta, 'proyectos', a)).mtimeMs);
+    } catch {
+      /* la borraron recién */
+    }
+  }
+  return out;
+}
+
+/** Una sesión (o agente) del proyecto: su estado y cuándo escribió por última vez (ms). */
+export interface SesionDeProyecto extends EstadoSesion {
+  lastDataAt: number;
+}
+
+/**
+ * Cuándo terminó todo un proyecto: todas sus sesiones y agentes quietos durante CALMA_MS, y alguno trabajó después de
+ * pedir el aviso (si no, avisaría por un turno viejo). Si trabajaron y después cerraron todas las sesiones, también
+ * terminó. Sin trabajo después del pedido no avisa nunca, aunque no haya ninguna sesión abierta.
+ */
+export class EsperaDeProyectos {
+  private espera = new EsperaDeFin();
+  private trabajaron = new Set<string>();
+
+  revisar(proyecto: string, sesiones: SesionDeProyecto[], pedido: number, ahora: number): boolean {
+    if (sesiones.some((s) => s.lastDataAt > pedido)) this.trabajaron.add(proyecto);
+    const listo = this.espera.revisarQuieto(
+      proyecto,
+      sesiones.every(quieta),
+      ahora,
+      this.trabajaron.has(proyecto),
+    );
+    if (listo) this.trabajaron.delete(proyecto);
+    return listo;
+  }
+
+  /** Olvida los proyectos que ya no tienen la marca (la apagaron). */
+  soloEstos(proyectos: Iterable<string>): void {
+    const siguen = new Set(proyectos);
+    for (const p of this.trabajaron) if (!siguen.has(p)) this.trabajaron.delete(p);
+    this.espera.soloEstas(siguen);
   }
 }
 

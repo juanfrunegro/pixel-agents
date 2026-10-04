@@ -1,7 +1,7 @@
 /**
  * Personal (copia de juanfrunegro), tanda 3: el panel de la pizarra del Brain (pendientes de cada proyecto y quién
- * trabaja ahora) y el menú chico de cada oficina ("Abrir carpeta" / "Abrir en VS Code" y, tanda 5, "Asignar proyecto ▸"
- * / "Dejar vacía"). Solo en el navegador.
+ * trabaja ahora) y el menú chico de cada oficina ("Abrir carpeta" / "Abrir en VS Code", "Avisame por WhatsApp cuando
+ * termine" y, tanda 5, "Asignar proyecto ▸" / "Dejar vacía"). Solo en el navegador.
  */
 import { useEffect, useRef, useState } from 'react';
 
@@ -101,6 +101,7 @@ export function PanelesPersonales({
     ? opcionesAsignar(p.menu.sala, p.oficinas, p.disponibles, p.candidatos)
     : [];
   const asignable = !!p.menu && p.oficinas.some((o) => o.sala === p.menu!.sala);
+  const avisaWhatsapp = !!p.menu && p.whatsapp.has(p.menu.sala);
   const estilo = { fontSize: '18px', cursor: 'pointer', textDecoration: 'underline' } as const;
 
   return (
@@ -148,6 +149,27 @@ export function PanelesPersonales({
                   {a.texto}
                 </button>
               ))}
+            {asignable && !libre && (
+              <button
+                role="menuitem"
+                className="text-left"
+                style={estilo}
+                onClick={() => {
+                  transport.send({
+                    type: 'setWhatsappProyecto',
+                    proyecto: p.menu!.sala,
+                    valor: !avisaWhatsapp,
+                  });
+                  cerrarMenu();
+                }}
+                title="Un solo aviso, cuando terminen todas sus sesiones y agentes. Después se apaga."
+                data-testid="whatsapp-proyecto"
+              >
+                {avisaWhatsapp
+                  ? 'Cancelar el aviso por WhatsApp'
+                  : 'Avisame por WhatsApp cuando termine'}
+              </button>
+            )}
             {asignable && !asignando && (
               <button
                 role="menuitem"

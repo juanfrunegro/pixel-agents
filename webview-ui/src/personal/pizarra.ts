@@ -54,6 +54,8 @@ interface Estado {
   candidatos: CandidatoOficina[];
   /** Panel de la sala de comunicaciones (clic en Presentaciones): interruptor de voz de cada sesión. */
   comunicaciones: boolean;
+  /** Proyectos con "Avisame por WhatsApp cuando termine este proyecto" prendido (whatsappProyectos). */
+  whatsapp: ReadonlySet<string>;
   version: number;
 }
 
@@ -67,6 +69,7 @@ const estado: Estado = {
   disponibles: [],
   candidatos: [],
   comunicaciones: false,
+  whatsapp: new Set(),
   version: 0,
 };
 const oyentes = new Set<() => void>();
@@ -115,6 +118,19 @@ export function setOficinas(
   estado.disponibles = disponibles;
   estado.candidatos = Array.isArray(candidatos) ? candidatos : [];
   avisar();
+}
+
+/** Mensaje whatsappProyectos del servidor. */
+export function setWhatsappProyectos(proyectos: unknown): void {
+  estado.whatsapp = new Set(
+    Array.isArray(proyectos) ? proyectos.filter((p): p is string => typeof p === 'string') : [],
+  );
+  avisar();
+}
+
+/** Prendió el aviso por WhatsApp de ese proyecto (para el cartel de su oficina). */
+export function whatsappProyecto(proyecto: string): boolean {
+  return estado.whatsapp.has(proyecto);
 }
 
 export interface OpcionAsignar {

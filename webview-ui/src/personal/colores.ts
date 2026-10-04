@@ -43,6 +43,8 @@ export const CARTEL_FONDO = '#14141f';
 export const CARTEL_TEXTO = '#e8e6f0';
 export const CARTEL_TEXTO_RESALTADO = '#ffffff';
 export const CARTEL_BORDE = '#3a3a55';
+/** Globito del aviso por WhatsApp de un proyecto, en el cartel de su oficina (verde de WhatsApp). */
+export const CARTEL_WHATSAPP = '#25d366';
 export const SALA_ACLARADO = '#ffffff';
 /** Placa del escritorio del CEO (placas.ts): filete dorado. */
 export const PLACA_CEO = '#e8c547';

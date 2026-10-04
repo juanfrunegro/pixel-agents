@@ -28,8 +28,11 @@ import {
 import {
   enviarWhatsapp,
   escribirWhatsapp,
+  escribirWhatsappProyecto,
   EsperaDeFin,
+  EsperaDeProyectos,
   pidioWhatsapp,
+  proyectosConWhatsapp,
   resumenParaAviso,
 } from './whatsapp.js';
 
@@ -638,6 +641,56 @@ export function cambiarWhatsappSesion(
 }
 
 const esperaDeFin = new EsperaDeFin();
+const esperaDeProyectos = new EsperaDeProyectos();
+/** Última lista de proyectos con aviso que se mandó a los clientes (para mandarla solo si cambia). */
+let whatsappProyectosVisto = '';
+
+/** Mensaje whatsappProyectos: proyectos con el aviso por WhatsApp prendido (menú y cartel de su oficina). */
+export function mensajeWhatsappProyectos(
+  proyectos: Iterable<string> = proyectosConWhatsapp().keys(),
+): { type: 'whatsappProyectos'; proyectos: string[] } {
+  const lista = [...proyectos].sort();
+  whatsappProyectosVisto = JSON.stringify(lista);
+  return { type: 'whatsappProyectos', proyectos: lista };
+}
+
+/** "Avisame por WhatsApp cuando termine este proyecto" (mensaje setWhatsappProyecto, solo con token). */
+export function cambiarWhatsappProyecto(
+  store: AgentStateStore,
+  proyecto: unknown,
+  valor: unknown,
+): boolean {
+  if (!escribirWhatsappProyecto(proyecto, valor)) return false;
+  const marcas = proyectosConWhatsapp();
+  esperaDeProyectos.soloEstos(marcas.keys());
+  store.broadcast(mensajeWhatsappProyectos(marcas.keys()) as never);
+  return true;
+}
+
+/**
+ * Aviso por proyecto (whatsapp.ts): cuando todas las sesiones y agentes del proyecto (folderName, el de su oficina)
+ * terminaron, manda un solo WhatsApp con la última respuesta de la sesión que trabajó último y apaga la marca.
+ */
+function revisarProyectos(store: AgentStateStore, ahora: number): void {
+  const marcas = proyectosConWhatsapp();
+  esperaDeProyectos.soloEstos(marcas.keys());
+  for (const [proyecto, pedido] of marcas) {
+    const agentes = [...store.values()].filter((a) => a.folderName === proyecto);
+    if (!esperaDeProyectos.revisar(proyecto, agentes, pedido, ahora)) continue;
+    const ultima = agentes
+      .filter((a) => !a.leadAgentId)
+      .sort((a, b) => b.lastDataAt - a.lastDataAt)[0];
+    enviarWhatsapp(
+      `Terminó todo en ${proyecto}`,
+      resumenParaAviso(ultima ? vigente(ultima)?.ultimoTexto : undefined),
+    );
+    escribirWhatsappProyecto(proyecto, false);
+    marcas.delete(proyecto);
+  }
+  if (JSON.stringify([...marcas.keys()].sort()) !== whatsappProyectosVisto) {
+    store.broadcast(mensajeWhatsappProyectos(marcas.keys()) as never);
+  }
+}
 
 /** Llamado por cada registro del transcript (desde updateContextUsage). */
 export function registrarUso(
@@ -738,4 +791,5 @@ export function revisarSenales(store: AgentStateStore, ahora = Date.now()): void
       if (msg) store.broadcast(msg as never);
     }
   }
+  revisarProyectos(store, ahora);
 }

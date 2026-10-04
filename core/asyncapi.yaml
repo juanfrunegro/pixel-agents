@@ -128,6 +128,7 @@ components:
         - $ref: '#/components/schemas/SkinsPersonalesLoaded'
         - $ref: '#/components/schemas/ConfigVoz'
         - $ref: '#/components/schemas/ConfigApagado'
+        - $ref: '#/components/schemas/WhatsappProyectos'
       discriminator: type
 
     ClientMessage:
@@ -167,6 +168,7 @@ components:
         - $ref: '#/components/schemas/PedirApagado'
         - $ref: '#/components/schemas/SetApagado'
         - $ref: '#/components/schemas/SetWhatsappSesion'
+        - $ref: '#/components/schemas/SetWhatsappProyecto'
       discriminator: type
 
     # ── Personal (copia de juanfrunegro) ──────────────────────────
@@ -370,6 +372,35 @@ components:
           type: integer
         valor:
           type: boolean
+
+    SetWhatsappProyecto:
+      description: >-
+        "Avisame por WhatsApp cuando termine este proyecto" (menú de una oficina). El servidor escribe o borra
+        ~/.pixel-agents/whatsapp/proyectos/<proyecto>.on y avisa una sola vez cuando todas las sesiones y agentes de
+        ese proyecto terminaron; después lo apaga solo. Solo con token.
+      type: object
+      additionalProperties: false
+      required: [type, proyecto, valor]
+      properties:
+        type:
+          const: setWhatsappProyecto
+        proyecto:
+          type: string
+        valor:
+          type: boolean
+
+    WhatsappProyectos:
+      description: Proyectos con el aviso por WhatsApp prendido (cartel de su oficina). Llega al conectarse y al cambiar.
+      type: object
+      additionalProperties: false
+      required: [type, proyectos]
+      properties:
+        type:
+          const: whatsappProyectos
+        proyectos:
+          type: array
+          items:
+            type: string
 
     PedirConfigVoz:
       description: >-

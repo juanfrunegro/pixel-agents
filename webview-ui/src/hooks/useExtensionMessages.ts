@@ -23,7 +23,7 @@ import { alLanzarSub, alTerminarSub } from '../personal/burbujas.js';
 import { setConfigVoz } from '../personal/configVoz.js';
 import { alMensajeContratistas } from '../personal/contratistas.js';
 import { alMensaje, registrarSub } from '../personal/personal.js';
-import { setOficinas } from '../personal/pizarra.js';
+import { setOficinas, setWhatsappProyectos } from '../personal/pizarra.js';
 import { setSkins } from '../personal/skins.js';
 import { isBrowserRuntime, isE2E } from '../runtime.js';
 import { transport } from '../transport/index.js';
@@ -648,6 +648,8 @@ export function useExtensionMessages(
         setSkins(msg.skins); // personal: skins de Marvel (solo estética)
       } else if (msg.type === 'configVoz') {
         setConfigVoz(msg.casos); // personal: qué casos avisan por voz (sala de comunicaciones)
+      } else if (msg.type === 'whatsappProyectos') {
+        setWhatsappProyectos(msg.proyectos); // personal: aviso por WhatsApp por proyecto (menú y cartel de la oficina)
       } else if (msg.type === 'oficinasEstado') {
         setOficinas(msg.lugares, msg.disponibles, msg.candidatos); // personal: qué proyecto ocupa cada oficina (menú de la oficina)
       } else if (msg.type === 'floorTilesLoaded') {

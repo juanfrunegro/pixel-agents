@@ -29,9 +29,11 @@ import {
 } from './personal/oficina.js';
 import {
   cambiarVozSesion,
+  cambiarWhatsappProyecto,
   cambiarWhatsappSesion,
   guardarNombre,
   mensajeNombres,
+  mensajeWhatsappProyectos,
 } from './personal/personal.js';
 import { escribirConfigVoz, leerConfigVoz } from './personal/senales.js';
 import { mensajeSkins } from './personal/skins.js';
@@ -403,6 +405,13 @@ export function handleClientMessage(
       break;
     }
 
+    case 'setWhatsappProyecto': {
+      // "Avisame por WhatsApp cuando termine este proyecto" (menú de la oficina). Solo con token; el servidor valida.
+      if (!ctx.privileged) break;
+      cambiarWhatsappProyecto(store, msg.proyecto, msg.valor);
+      break;
+    }
+
     case 'pedirConfigVoz': {
       // Al abrir la sala de comunicaciones: qué casos avisan por voz (lo leen los hooks de voz).
       if (!ctx.privileged) break;
@@ -694,5 +703,6 @@ function handleWebviewReady(send: WsSend, ctx: ClientMessageContext): void {
   // client shows bare characters until each agent takes another turn.
   send(mensajeNombres()); // personal: nombres de fantasía antes de la actividad
   if (ctx.privileged) send(mensajeOficinas()); // personal: qué proyecto ocupa cada oficina (menú de la oficina)
+  send(mensajeWhatsappProyectos()); // personal: proyectos con aviso por WhatsApp (cartel de su oficina)
   resendAgentActivity(send, store);
 }

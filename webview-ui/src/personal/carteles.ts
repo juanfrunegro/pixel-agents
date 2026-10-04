@@ -3,6 +3,8 @@
  * puerta. Siempre visible pero tenue (sin prender "Mostrar áreas", que además tiñe el piso); al pasar el mouse por la
  * sala, la sala se aclara un poco y su cartel se resalta. En el pasillo no va nada: taparía a los que caminan.
  * Con "Mostrar áreas" prendido no se dibuja (ya están los nombres del original).
+ * Si el proyecto tiene prendido "Avisame por WhatsApp cuando termine" (menú de la oficina), el cartel lleva un globito
+ * verde a la derecha del nombre.
  */
 import { esOficinaLibre } from '../../../core/src/salasComunes.js';
 import { TILE_SIZE } from '../constants.js';
@@ -11,8 +13,10 @@ import {
   CARTEL_FONDO,
   CARTEL_TEXTO,
   CARTEL_TEXTO_RESALTADO,
+  CARTEL_WHATSAPP,
   SALA_ACLARADO,
 } from './colores.js';
+import { whatsappProyecto } from './pizarra.js';
 
 interface Sala {
   label: string;
@@ -67,6 +71,37 @@ export function salaEn(
 }
 
 const ALFA_REPOSO = 0.72;
+
+/** Globito de chat con tres puntos (7×7 píxeles): # verde, o blanco, . vacío. */
+const GLOBITO = ['.#####.', '#######', '#o#o#o#', '#######', '.#####.', '.##....', '##.....'];
+
+/**
+ * El globito al lado de un nombre de sala con "Mostrar áreas" prendido (renderAreaLabels del original): a la derecha del
+ * texto, si ese proyecto tiene el aviso por WhatsApp prendido.
+ */
+export function globitoJuntoAlNombre(
+  ctx: CanvasRenderingContext2D,
+  label: string,
+  derechaDelTexto: number,
+  cy: number,
+  fuente: number,
+): void {
+  if (esOficinaLibre(label) || !whatsappProyecto(label)) return;
+  const u = Math.max(1, Math.round(fuente / 9));
+  ctx.globalAlpha = 1;
+  dibujarGlobito(ctx, Math.round(derechaDelTexto + 2 * u), Math.round(cy - 3.5 * u), u);
+}
+
+function dibujarGlobito(ctx: CanvasRenderingContext2D, x: number, y: number, u: number): void {
+  GLOBITO.forEach((fila, r) => {
+    for (let c = 0; c < fila.length; c++) {
+      if (fila[c] === '.') continue;
+      ctx.fillStyle = fila[c] === '#' ? CARTEL_WHATSAPP : CARTEL_TEXTO_RESALTADO;
+      ctx.fillRect(x + c * u, y + r * u, u, u);
+    }
+  });
+}
+
 const ACLARADO = 0.07;
 
 export function renderCarteles(
@@ -107,8 +142,11 @@ export function renderCarteles(
     const libre = esOficinaLibre(sala.label);
     const texto = libre ? 'Libre' : sala.label;
     const resaltado = sala.label === encima;
+    const wpp = !libre && whatsappProyecto(sala.label);
+    const u = Math.max(1, Math.round(fuente / 9));
+    const extra = wpp ? 9 * u : 0; // globito (7) y su espacio (2)
     const ancho = Math.min(
-      ctx.measureText(texto).width + fuente,
+      ctx.measureText(texto).width + fuente + extra,
       (sala.maxCol - sala.minCol + 1) * s,
     );
     const alto = Math.round(fuente * 1.5);
@@ -127,7 +165,11 @@ export function renderCarteles(
     ctx.fillRect(x, y, borde, alto);
     ctx.fillRect(x + ancho - borde, y, borde, alto);
     ctx.fillStyle = resaltado ? CARTEL_TEXTO_RESALTADO : CARTEL_TEXTO;
-    ctx.fillText(texto, cx, cy + borde / 2, ancho - fuente / 2);
+    ctx.fillText(texto, cx - extra / 2, cy + borde / 2, ancho - fuente / 2 - extra);
+    if (wpp) {
+      ctx.globalAlpha = 1; // el aviso se ve siempre, aunque el cartel esté tenue
+      dibujarGlobito(ctx, Math.round(x + ancho - fuente / 2 - 7 * u), Math.round(cy - 3.5 * u), u);
+    }
   }
   ctx.restore();
 }

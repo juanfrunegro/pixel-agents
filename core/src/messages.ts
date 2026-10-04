@@ -47,7 +47,8 @@ export type ServerMessage =
   | OficinaAsignada
   | SkinsPersonalesLoaded
   | ConfigVoz
-  | ConfigApagado;
+  | ConfigApagado
+  | WhatsappProyectos;
 
 export type ClientMessage =
   | WebviewReady
@@ -83,7 +84,8 @@ export type ClientMessage =
   | SetConfigVoz
   | PedirApagado
   | SetApagado
-  | SetWhatsappSesion;
+  | SetWhatsappSesion
+  | SetWhatsappProyecto;
 
 export interface ProviderCapabilities {
   type: 'providerCapabilities';
@@ -426,6 +428,11 @@ export interface ConfigApagado {
 
 export type OpcionApagado = 'sin_pestanas' | '30m' | '1h' | '2h' | '4h' | 'nunca';
 
+export interface WhatsappProyectos {
+  type: 'whatsappProyectos';
+  proyectos: string[];
+}
+
 export interface WebviewReady {
   type: 'webviewReady';
 }
@@ -558,10 +565,10 @@ export interface RecargarOficina {
 export interface AbrirProyecto {
   type: 'abrirProyecto';
   sala: string;
-  accion: AnonymousSchema_298;
+  accion: AnonymousSchema_301;
 }
 
-export type AnonymousSchema_298 = 'carpeta' | 'vscode';
+export type AnonymousSchema_301 = 'carpeta' | 'vscode';
 
 export interface AsignarOficina {
   type: 'asignarOficina';
@@ -586,11 +593,11 @@ export interface PedirConfigVoz {
 
 export interface SetConfigVoz {
   type: 'setConfigVoz';
-  caso: AnonymousSchema_309;
+  caso: AnonymousSchema_312;
   valor: boolean;
 }
 
-export type AnonymousSchema_309 = 'pregunta' | 'permiso' | 'fin_pregunta' | 'esperando';
+export type AnonymousSchema_312 = 'pregunta' | 'permiso' | 'fin_pregunta' | 'esperando';
 
 export interface PedirApagado {
   type: 'pedirApagado';
@@ -604,5 +611,11 @@ export interface SetApagado {
 export interface SetWhatsappSesion {
   type: 'setWhatsappSesion';
   id: number;
+  valor: boolean;
+}
+
+export interface SetWhatsappProyecto {
+  type: 'setWhatsappProyecto';
+  proyecto: string;
   valor: boolean;
 }
