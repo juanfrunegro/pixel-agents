@@ -1,5 +1,8 @@
 const debug = process.env.PIXEL_AGENTS_DEBUG !== '0';
 
+import * as fs from 'fs';
+import * as path from 'path';
+
 import type { HookProvider } from '../../core/src/provider.js';
 import type { AgentStateStore } from './agentStateStore.js';
 import { TEXT_IDLE_DELAY_MS, TOOL_DONE_DELAY_MS } from './constants.js';
@@ -333,6 +336,7 @@ export function processTranscriptLine(
                   `[Pixel Agents] Agent ${agentId} background agent launched: ${completedToolId}`,
                 );
                 agent.backgroundAgentToolIds.add(completedToolId);
+                anotarTarea(agent, block, completedToolId); // personal: agentId → spawn, para el aviso sin tool-use-id
                 // Current harnesses OMIT run_in_background from the tool_use
                 // input, so the spawn's original agentToolStart went out
                 // unflagged. Re-broadcast it flagged now that the result
@@ -414,8 +418,11 @@ export function processTranscriptLine(
       const content = record.content as string | undefined;
       if (content) {
         const toolIdMatch = content.match(/<tool-use-id>(.*?)<\/tool-use-id>/);
-        if (toolIdMatch) {
-          const completedToolId = toolIdMatch[1];
+        // personal: el aviso de un agente lanzado en segundo plano que terminó con la sesión quieta trae solo
+        // <task-id> (el agentId), sin <tool-use-id>: sin esto, el sub-agente quedaba en la oficina como fantasma.
+        const completedToolIdOrNull = toolIdMatch ? toolIdMatch[1] : toolIdDeTarea(agent, content);
+        if (completedToolIdOrNull) {
+          const completedToolId = completedToolIdOrNull;
           if (agent.backgroundAgentToolIds.has(completedToolId)) {
             console.log(
               `[Pixel Agents] Agent ${agentId} background agent done: ${completedToolId}`,
@@ -721,6 +728,65 @@ function linkTeammates(_agentId: number, agent: AgentState, agents: AgentStateSt
 }
 
 /** Check if a tool_result block indicates an async/background agent launch */
+// ── personal: avisos de fin que traen solo <task-id> ─────────────────────────
+
+/** agentId del sub-agente (el <task-id> del aviso) → id del spawn, por agente que lo lanzó. */
+const tareas = new WeakMap<AgentState, Map<string, string>>();
+
+function textoDe(block: Record<string, unknown>): string {
+  const c = block.content;
+  if (typeof c === 'string') return c;
+  if (!Array.isArray(c)) return '';
+  return c
+    .map((i) =>
+      typeof i === 'object' && i && typeof (i as { text?: unknown }).text === 'string'
+        ? (i as { text: string }).text
+        : '',
+    )
+    .join('\n');
+}
+
+/** Al lanzarse en segundo plano, el resultado dice "agentId: <id>": se anota para reconocer su aviso de fin. */
+function anotarTarea(agent: AgentState, block: Record<string, unknown>, toolId: string): void {
+  const m = textoDe(block).match(/agentId:\s*([A-Za-z0-9_-]+)/);
+  if (!m) return;
+  let mapa = tareas.get(agent);
+  if (!mapa) {
+    mapa = new Map();
+    tareas.set(agent, mapa);
+  }
+  mapa.set(m[1], toolId);
+}
+
+/**
+ * El spawn al que corresponde un aviso con solo <task-id>: lo anotado al lanzarlo o, si el server se reinició en el
+ * medio, el sidecar `agent-<id>.meta.json` (en la carpeta subagents/ de la sesión, o la misma carpeta si quien lo lanzó
+ * es a su vez un sub-agente).
+ */
+function toolIdDeTarea(agent: AgentState, content: string): string | null {
+  const m = content.match(/<task-id>([A-Za-z0-9_-]+)<\/task-id>/);
+  if (!m) return null;
+  const anotado = tareas.get(agent)?.get(m[1]);
+  if (anotado) return anotado;
+  if (!agent.jsonlFile) return null;
+  for (const dir of [
+    agent.jsonlFile.replace(/\.jsonl$/, '') + '/subagents',
+    path.dirname(agent.jsonlFile),
+  ]) {
+    try {
+      const meta = JSON.parse(
+        fs.readFileSync(path.join(dir, `agent-${m[1]}.meta.json`), 'utf8'),
+      ) as {
+        toolUseId?: unknown;
+      };
+      if (typeof meta.toolUseId === 'string') return meta.toolUseId;
+    } catch {
+      /* no está acá */
+    }
+  }
+  return null;
+}
+
 function isAsyncAgentResult(block: Record<string, unknown>): boolean {
   const content = block.content;
   if (Array.isArray(content)) {

@@ -106,7 +106,13 @@ function correrOrca(cb: (salida: string | null) => void): void {
   execFile(
     cli,
     ['worktree', 'ps', '--json'],
-    { timeout: TIMEOUT_MS, windowsHide: true, maxBuffer: 8 * 1024 * 1024 },
+    {
+      timeout: TIMEOUT_MS,
+      windowsHide: true,
+      maxBuffer: 8 * 1024 * 1024,
+      // Desde su propia carpeta: si heredara la del server, Windows no dejaría borrarla mientras corre.
+      cwd: path.dirname(cli),
+    },
     (err, stdout) => cb(err ? null : stdout),
   );
 }

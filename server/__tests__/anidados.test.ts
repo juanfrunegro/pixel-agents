@@ -73,6 +73,13 @@ const terminado = (id: string, agentId: string) =>
     operation: 'enqueue',
     content: `<task-notification> <task-id>${agentId}</task-id> <tool-use-id>${id}</tool-use-id> <output>ok</output>`,
   });
+/** Aviso de fin como llega cuando la sesión estaba quieta (4/10): solo <task-id>, sin <tool-use-id>. */
+const terminadoSinTool = (agentId: string) =>
+  linea({
+    type: 'queue-operation',
+    operation: 'enqueue',
+    content: `<task-notification>\n<task-id>${agentId}</task-id>\n<output-file>/tmp/x.output</output-file>\n<status>completed</status>`,
+  });
 const lee = (id: string) =>
   linea({
     type: 'assistant',
@@ -268,5 +275,32 @@ describe('agentes anidados (un manager que delega)', () => {
     );
     expect(watch.store.size).toBe(0);
     expect(msgs).toContainEqual({ type: 'subagentClear', id: 1, parentToolId: SPAWN_ANIDADO });
+  });
+
+  it('aviso de fin sin tool-use-id: reconoce al manager por su agentId y no queda fantasma', () => {
+    const manager = lanzarManager();
+    expect(manager).toBeGreaterThan(0);
+    processTranscriptLine(1, terminadoSinTool(ID_MANAGER), agents, waitingTimers, permissionTimers);
+    expect(watch.store.size).toBe(0);
+    expect(msgs).toContainEqual({ type: 'subagentClear', id: 1, parentToolId: SPAWN_MANAGER });
+  });
+
+  it('aviso sin tool-use-id después de reiniciar el server: lo busca en el sidecar', () => {
+    lanzarManager();
+    // El server se reinició: la sesión vuelve con el spawn vivo pero sin lo anotado al lanzarlo.
+    const lead = agents.get(1)!;
+    const reiniciada = { ...lead, backgroundAgentToolIds: new Set([SPAWN_MANAGER]) } as AgentState;
+    agents.set(1, reiniciada);
+    processTranscriptLine(1, terminadoSinTool(ID_MANAGER), agents, waitingTimers, permissionTimers);
+    expect(msgs).toContainEqual({ type: 'subagentClear', id: 1, parentToolId: SPAWN_MANAGER });
+  });
+
+  it('el manager reconoce el aviso sin tool-use-id de su agente anidado', () => {
+    const manager = lanzarManager();
+    const anidado = sidecarAnidado();
+    enSombra(manager, spawn(SPAWN_ANIDADO, 'analista-cobertura'));
+    enSombra(manager, lanzadoEnFondo(SPAWN_ANIDADO, ID_ANIDADO));
+    enSombra(manager, terminadoSinTool(ID_ANIDADO));
+    expect(watch.isWatching(anidado)).toBe(false);
   });
 });

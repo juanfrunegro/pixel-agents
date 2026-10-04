@@ -129,6 +129,17 @@ export function installTestHooks(officeStateRef: { current: OfficeState | null }
       waitingAwaitingInput: ch.waitingAwaitingInput,
       isHeadless: ch.isHeadless,
       isGreeter: ch.isGreeter,
+      // personal: dónde está y adónde va (oficina por niveles, ambiente.ts)
+      isSubagent: ch.isSubagent,
+      parentAgentId: ch.parentAgentId,
+      isActive: ch.isActive,
+      state: ch.state,
+      tileCol: ch.tileCol,
+      tileRow: ch.tileRow,
+      seatId: ch.seatId,
+      lugar: ch.lugar,
+      destino: ch.destino ? { ...ch.destino } : null,
+      pathLen: ch.path.length,
     }));
   };
 
