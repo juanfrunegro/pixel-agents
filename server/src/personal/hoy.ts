@@ -13,6 +13,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 
+import { timingSafeStringEqual } from '../httpServer.js';
 import { costoUsd, esDeWsl, leerNombres, proyectoDe, raicesWsl } from './personal.js';
 
 export const PAUSA_MS = 5 * 60_000;
@@ -490,7 +491,8 @@ export function registrarHoy(
   cupo: () => CupoPorCuenta = () => ({ windows: null, wsl: null }),
 ): void {
   const conToken = (url: string) =>
-    !!token && (new URL(url, 'http://localhost').searchParams.get('token') ?? '') === token;
+    !!token &&
+    timingSafeStringEqual(new URL(url, 'http://localhost').searchParams.get('token') ?? '', token);
   app.get('/hoy', async (request, reply) => {
     if (!conToken(request.url)) return reply.code(403).send('Falta el token de la oficina.');
     return reply.type('text/html; charset=utf-8').send((await resumenVigente()).html);

@@ -40,23 +40,56 @@ export interface Nombres {
   [k: string]: unknown;
 }
 
-export function leerNombres(): Nombres {
+const NOMBRES_POR_DEFECTO = (): Nombres => ({ ceo: 'CEO', agentes: {}, descartables: [] });
+
+/** Error al leer un nombres.json que existe pero no se puede leer o parsear: no se escribe encima. */
+export class NombresIlegibles extends Error {}
+
+/** Como leerNombres, pero si el archivo existe y está roto tira NombresIlegibles (no existe = valores por defecto). */
+function leerNombresEstricto(): Nombres {
+  let crudo: string;
   try {
-    const j = JSON.parse(fs.readFileSync(rutaNombres(), 'utf8')) as Partial<Nombres>;
+    crudo = fs.readFileSync(rutaNombres(), 'utf8');
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return NOMBRES_POR_DEFECTO();
+    throw new NombresIlegibles(String(e));
+  }
+  try {
+    const j = JSON.parse(crudo) as Partial<Nombres>;
+    if (!j || typeof j !== 'object' || Array.isArray(j)) throw new Error('no es un objeto');
     return {
       ...j,
       ceo: typeof j.ceo === 'string' ? j.ceo : 'CEO',
       agentes: j.agentes && typeof j.agentes === 'object' ? j.agentes : {},
       descartables: Array.isArray(j.descartables) ? j.descartables : [],
     } as Nombres;
-  } catch {
-    return { ceo: 'CEO', agentes: {}, descartables: [] };
+  } catch (e) {
+    throw new NombresIlegibles(String(e));
   }
 }
 
-/** Guarda un nombre ("ceo" = sesión principal). Nombre vacío = vuelve al nombre por defecto. */
+export function leerNombres(): Nombres {
+  try {
+    return leerNombresEstricto();
+  } catch {
+    return NOMBRES_POR_DEFECTO();
+  }
+}
+
+/**
+ * Guarda un nombre ("ceo" = sesión principal). Nombre vacío = vuelve al nombre por defecto.
+ * Si nombres.json existe pero está roto no lo pisa (perdería roles/áreas/externos): lo avisa y devuelve lo que hay.
+ * La clave tiene que ser un texto de hasta 80 caracteres.
+ */
 export function guardarNombre(clave: string, nombre: string): Nombres {
-  const n = leerNombres();
+  if (typeof clave !== 'string' || !clave || clave.length > 80) return leerNombres();
+  let n: Nombres;
+  try {
+    n = leerNombresEstricto();
+  } catch (e) {
+    console.error(`[Pixel Agents] nombres.json ilegible, no se guarda el nombre: ${String(e)}`);
+    return leerNombres();
+  }
   const limpio = nombre.trim().slice(0, 60);
   if (clave === 'ceo') {
     n.ceo = limpio || 'CEO';
@@ -253,9 +286,35 @@ export function equipoDe(tools: string | undefined): string[] | undefined {
         .filter(Boolean)
     : undefined;
 }
+/**
+ * Valor de `nombre:` en el frontmatter. Además de `clave: valor` en una línea, entiende el bloque (`>` / `|`: junta las
+ * líneas indentadas con espacios) y la lista YAML (`- a` / `- b`: junta los ítems con coma).
+ */
 function campo(frontmatter: string, nombre: string): string | undefined {
-  const m = new RegExp(`^${nombre}:\\s*(.+?)\\s*$`, 'm').exec(frontmatter);
-  return m ? m[1].replace(/^['"]|['"]$/g, '') : undefined;
+  const m = new RegExp(`^${nombre}:[ \\t]*(.*?)[ \\t]*\\r?$`, 'm').exec(frontmatter);
+  if (!m) return undefined;
+  const valor = m[1].replace(/^['"]|['"]$/g, '');
+  const bloque = /^[>|][+-]?$/.test(valor);
+  if (valor && !bloque) return valor;
+  // Valor vacío o bloque: las líneas siguientes con sangría (o ítems de lista a la misma altura) son el contenido.
+  const resto = frontmatter
+    .slice((m.index ?? 0) + m[0].length)
+    .split(/\r?\n/)
+    .slice(1);
+  const lineas: string[] = [];
+  for (const l of resto) {
+    if (!l.trim()) {
+      if (bloque) continue;
+      break;
+    }
+    if (!/^[ \t]/.test(l) && !(!bloque && /^-[ \t]/.test(l))) break;
+    lineas.push(l.trim());
+  }
+  if (bloque) return lineas.join(' ') || undefined;
+  const items = lineas
+    .filter((l) => l.startsWith('-'))
+    .map((l) => l.replace(/^-[ \t]*/, '').replace(/^['"]|['"]$/g, ''));
+  return items.length ? items.join(', ') : undefined;
 }
 
 /** Índice name → definición, rehecho como mucho cada 30 s (se crean agentes nuevos). */
@@ -347,6 +406,8 @@ interface InfoSesion {
   modelo?: string;
   costo: number;
   vistos: Set<string>;
+  /** Transcript con el que se creó: si el agente cambia de archivo (/clear), la info se rehace. */
+  jsonlFile?: string;
   /** Se quedó sin tokens: hasta cuándo (segundos epoch; 0 = sin hora de vuelta). undefined = despierto. */
   dormidoHasta?: number;
   /** Humo y deploy (senales.ts). */
@@ -430,11 +491,24 @@ function sumar(info: InfoSesion, r: Registro): boolean {
   return true;
 }
 
+/** La info guardada del agente, si todavía es de su transcript actual (/clear lo cambia: reassignAgentToFile). */
+function vigente(agent: AgentState): InfoSesion | undefined {
+  const info = sesiones.get(agent);
+  return info && info.jsonlFile === agent.jsonlFile ? info : undefined;
+}
+
 /** La primera vez lee el transcript completo (el original solo lee la cola), después suma registro a registro. */
 function infoDe(agent: AgentState): InfoSesion {
-  let info = sesiones.get(agent);
+  let info = vigente(agent);
   if (info) return info;
-  info = { costo: 0, vistos: new Set(), senales: senalesNuevas(), voz: false, vozOverride: null };
+  info = {
+    jsonlFile: agent.jsonlFile,
+    costo: 0,
+    vistos: new Set(),
+    senales: senalesNuevas(),
+    voz: false,
+    vozOverride: null,
+  };
   if (agent.jsonlFile) info.vozOverride = leerOverrideVoz(sesionDe(agent.jsonlFile));
   sesiones.set(agent, info);
   try {
@@ -520,11 +594,12 @@ export function registrarUso(
   store: AgentStateStore,
   record: unknown,
 ): void {
-  const primera = !sesiones.has(agent);
+  const primera = !vigente(agent);
   const info = infoDe(agent);
   const sumo = sumar(info, record as Registro);
   const cambioLimite = aplicarLimite(info, record as Registro);
-  const cambioSenal = aplicarSenal(info.senales, record as never);
+  // En la primera lectura infoDe ya contó este registro (está en el transcript): aplicarlo otra vez duplicaría errores.
+  const cambioSenal = primera ? false : aplicarSenal(info.senales, record as never);
   if (sumo || cambioLimite || cambioSenal || primera) {
     const msg = mensajeInfo(agentId, agent);
     if (msg) store.broadcast(msg as never);

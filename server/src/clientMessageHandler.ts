@@ -292,6 +292,8 @@ export function handleClientMessage(
 
     // Personal (copia de juanfrunegro)
     case 'renameAgent': {
+      // Sin token (pestaña sin ?token=) no se escribe ~/.claude/agents/nombres.json.
+      if (!ctx.privileged) break;
       if (typeof msg.clave === 'string' && typeof msg.nombre === 'string') {
         store.broadcast(mensajeNombres(guardarNombre(msg.clave, msg.nombre)));
       }
@@ -301,7 +303,10 @@ export function handleClientMessage(
       // Solo una conexión con token (la del navegador de la PC) puede apagarlo.
       if (ctx.privileged) {
         console.log('[Pixel Agents] Apagado pedido desde la oficina.');
-        setTimeout(() => process.exit(0), 300);
+        // Por la señal, no process.exit: así corre el shutdown() de cli.ts (server.stop() borra server.json y servers/<pid>).
+        setTimeout(() => process.emit('SIGTERM'), 300);
+        // Respaldo si nada escucha la señal (server embebido, tests).
+        setTimeout(() => process.exit(0), 3000).unref();
       }
       break;
     }

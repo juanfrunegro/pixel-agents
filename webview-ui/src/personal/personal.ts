@@ -95,6 +95,9 @@ export function separarStatus(status: string): { texto: string; meta: MetaSub | 
   }
 }
 
+/** Primer status de un sub-agente que todavía no estaba registrado (clave padre|toolId); registrarSub lo aplica. */
+const statusPendiente = new Map<string, string>();
+
 /** Llamado al principio del manejador de mensajes del original. Limpia el status para que el original no vea la meta. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function alMensaje(msg: any): void {
@@ -119,11 +122,18 @@ export function alMensaje(msg: any): void {
     estado.status.set(msg.id, msg.status);
     anotarHistorial(msg.id, msg.status);
   } else if (msg?.type === 'subagentToolStart' && typeof msg.status === 'string') {
+    let encontrado = false;
     for (const [subId, s] of estado.subs) {
       if (s.padre === msg.id && s.toolId === msg.parentToolId) {
         estado.status.set(subId, msg.status);
         anotarHistorial(subId, msg.status);
+        encontrado = true;
       }
+    }
+    // El sub se crea "lazy" justo después de este mensaje: guarda el status para que registrarSub lo aplique.
+    if (!encontrado) {
+      if (statusPendiente.size >= 50) statusPendiente.clear();
+      statusPendiente.set(`${msg.id}|${msg.parentToolId}`, msg.status);
     }
   }
   if (msg?.type === 'agentNamesLoaded') {
@@ -172,6 +182,12 @@ export function registrarSub(
   paletas = 6,
 ): void {
   estado.subs.set(subId, { padre, toolId });
+  const pendiente = statusPendiente.get(`${padre}|${toolId}`);
+  if (pendiente !== undefined) {
+    statusPendiente.delete(`${padre}|${toolId}`);
+    estado.status.set(subId, pendiente);
+    anotarHistorial(subId, pendiente);
+  }
   const tipo = estado.metaPorTool.get(toolId)?.t;
   const nombre = tipo ? estado.nombres.agentes[tipo] : undefined;
   const aspecto =

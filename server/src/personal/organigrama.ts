@@ -10,6 +10,7 @@ import * as path from 'path';
 import { aspectoDePersona, personaDe } from '../../../core/src/aspectoPersonal.js';
 import { skinDeNombre, SKINS_MARVEL } from '../../../core/src/skinsMarvel.js';
 import { PALETTE_COUNT } from '../constants.js';
+import { timingSafeStringEqual } from '../httpServer.js';
 import type { Definicion, Nombres, PerfilCodex, Permiso } from './personal.js';
 import { definiciones, esDeWsl, leerNombres, ordenPersonas, perfilesCodex } from './personal.js';
 
@@ -22,15 +23,23 @@ interface Uso {
 }
 
 function leerJsonl(ruta: string): Array<Record<string, unknown>> {
+  let texto: string;
   try {
-    return fs
-      .readFileSync(ruta, 'utf8')
-      .split('\n')
-      .filter((l) => l.trim())
-      .map((l) => JSON.parse(l) as Record<string, unknown>);
+    texto = fs.readFileSync(ruta, 'utf8');
   } catch {
     return [];
   }
+  // Una línea mala (la última a medio escribir) se salta; no tira las demás.
+  const filas: Array<Record<string, unknown>> = [];
+  for (const l of texto.split('\n')) {
+    if (!l.trim()) continue;
+    try {
+      filas.push(JSON.parse(l) as Record<string, unknown>);
+    } catch {
+      /* línea rota */
+    }
+  }
+  return filas;
 }
 
 function usoPorAgente(): Map<string, Uso> {
@@ -369,7 +378,8 @@ ${proyectos}${compartidos}${contratistas}<details class="personas"><summary>Por 
 export function registrarOrganigrama(app: FastifyInstance, token: string): void {
   app.get('/organigrama', async (request, reply) => {
     const dado = new URL(request.url, 'http://localhost').searchParams.get('token') ?? '';
-    if (!token || dado !== token) return reply.code(403).send('Falta el token de la oficina.');
+    if (!token || !timingSafeStringEqual(dado, token))
+      return reply.code(403).send('Falta el token de la oficina.');
     return reply.type('text/html; charset=utf-8').send(htmlOrganigrama());
   });
 }

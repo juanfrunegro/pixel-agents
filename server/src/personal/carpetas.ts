@@ -30,29 +30,48 @@ export function raizPorDefecto(): string {
   return path.join(os.homedir() || '.', 'Documents', 'IA Tools');
 }
 
+/** Como leerCarpetas, pero si el archivo existe y está roto tira el error (no existe = valores por defecto). */
+function leerCarpetasEstricto(ruta: string): ArchivoCarpetas {
+  let crudo: string;
+  try {
+    crudo = fs.readFileSync(ruta, 'utf8');
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT')
+      return { raiz: raizPorDefecto(), extras: [] };
+    throw e;
+  }
+  const d = JSON.parse(crudo) as { raiz?: unknown; extras?: unknown };
+  const extras = Array.isArray(d.extras)
+    ? d.extras.filter(
+        (e): e is Carpeta =>
+          !!e &&
+          typeof (e as Carpeta).nombre === 'string' &&
+          typeof (e as Carpeta).ruta === 'string',
+      )
+    : [];
+  return {
+    raiz: typeof d.raiz === 'string' && d.raiz.trim() ? d.raiz.trim() : raizPorDefecto(),
+    extras,
+  };
+}
+
 export function leerCarpetas(ruta = rutaCarpetas()): ArchivoCarpetas {
   try {
-    const d = JSON.parse(fs.readFileSync(ruta, 'utf8')) as { raiz?: unknown; extras?: unknown };
-    const extras = Array.isArray(d.extras)
-      ? d.extras.filter(
-          (e): e is Carpeta =>
-            !!e &&
-            typeof (e as Carpeta).nombre === 'string' &&
-            typeof (e as Carpeta).ruta === 'string',
-        )
-      : [];
-    return {
-      raiz: typeof d.raiz === 'string' && d.raiz.trim() ? d.raiz.trim() : raizPorDefecto(),
-      extras,
-    };
+    return leerCarpetasEstricto(ruta);
   } catch {
     return { raiz: raizPorDefecto(), extras: [] };
   }
 }
 
-/** Suma una carpeta a los extras (si ya estaba por ruta, no la repite). */
+/** Suma una carpeta a los extras (si ya estaba por ruta, no la repite). Con carpetas.json roto no lo pisa: lo avisa. */
 export function guardarExtra(c: Carpeta, ruta = rutaCarpetas()): void {
-  const d = leerCarpetas(ruta);
+  let d: ArchivoCarpetas;
+  try {
+    d = leerCarpetasEstricto(ruta);
+  } catch (e) {
+    console.error(`[Pixel Agents] carpetas.json ilegible, no se guarda la carpeta: ${String(e)}`);
+    return;
+  }
   if (d.extras.some((e) => mismaRuta(e.ruta, c.ruta))) return;
   d.extras.push(c);
   fs.mkdirSync(path.dirname(ruta), { recursive: true });

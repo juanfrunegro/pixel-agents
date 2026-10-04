@@ -320,7 +320,7 @@ function standaloneTokenValid(url: string | undefined, expected: string): boolea
 
 /** Constant-time string compare, length-guarded (timingSafeEqual throws on a
  *  length mismatch). One implementation for all three token comparisons. */
-function timingSafeStringEqual(actual: string, expected: string): boolean {
+export function timingSafeStringEqual(actual: string, expected: string): boolean {
   const actualBuf = Buffer.from(actual);
   const expectedBuf = Buffer.from(expected);
   return actualBuf.length === expectedBuf.length && crypto.timingSafeEqual(actualBuf, expectedBuf);

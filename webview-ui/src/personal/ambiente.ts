@@ -174,7 +174,7 @@ export function baseDe(os: OfficeState, sub: Character, ahora = Date.now()): Bas
       };
     }
   }
-  const otras = [...bases.values()];
+  const otras = [...bases].filter(([id]) => id !== sub.id).map(([, b]) => b); // sin la base del propio sub
   const pegado = (t: { col: number; row: number }) =>
     otras.some((b) => Math.max(Math.abs(b.col - t.col), Math.abs(b.row - t.row)) < 2);
   let mejor: Base = { col: sub.tileCol, row: sub.tileRow, hecho: ahora };
@@ -329,7 +329,14 @@ export function tickPersonal(os: OfficeState, ahora = Date.now()): void {
     if (!ch.isSubagent && dormidoDe(ch.id, ahora)) {
       ch.destino = undefined;
       ch.lugar = null;
-      if (ch.state === CharacterState.TYPE) {
+      const silla = ch.seatId ? os.seats.get(ch.seatId) : undefined;
+      if (
+        ch.state === CharacterState.TYPE &&
+        silla &&
+        (ch.tileCol !== silla.seatCol || ch.tileRow !== silla.seatRow)
+      ) {
+        os.sendToSeat(ch.id); // sentado fuera de su silla (sillón de la cafetería): vuelve a su escritorio a dormir
+      } else if (ch.state === CharacterState.TYPE) {
         ch.seatTimer = Math.max(ch.seatTimer, 1); // sigue sentado mientras duerma
         ch.frame = 0;
         ch.frameTimer = 0;

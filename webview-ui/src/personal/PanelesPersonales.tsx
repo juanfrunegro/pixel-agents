@@ -3,7 +3,7 @@
  * trabaja ahora) y el menú chico de cada oficina ("Abrir carpeta" / "Abrir en VS Code" y, tanda 5, "Asignar proyecto ▸"
  * / "Dejar vacía"). Solo en el navegador.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { esOficinaLibre } from '../../../core/src/salasComunes.js';
 import { isBrowserRuntime } from '../runtime.js';
@@ -45,15 +45,20 @@ export function PanelesPersonales({
     return () => clearInterval(t);
   }, []);
 
-  useEffect(
-    () =>
-      transport.onMessage((msg) => {
-        if (msg.type !== 'proyectoAbierto' && msg.type !== 'oficinaAsignada') return;
-        setAviso(msg.error ?? null);
-        if (msg.error) setTimeout(() => setAviso(null), 5000);
-      }),
-    [],
-  );
+  const avisoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    const off = transport.onMessage((msg) => {
+      if (msg.type !== 'proyectoAbierto' && msg.type !== 'oficinaAsignada') return;
+      if (avisoTimer.current) clearTimeout(avisoTimer.current); // un aviso nuevo no hereda el timeout del anterior
+      avisoTimer.current = null;
+      setAviso(msg.error ?? null);
+      if (msg.error) avisoTimer.current = setTimeout(() => setAviso(null), 5000);
+    });
+    return () => {
+      off();
+      if (avisoTimer.current) clearTimeout(avisoTimer.current);
+    };
+  }, []);
 
   useEffect(() => {
     const tecla = (e: KeyboardEvent) => {
