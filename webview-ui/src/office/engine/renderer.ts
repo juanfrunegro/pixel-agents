@@ -46,6 +46,7 @@ import {
   VOID_TILE_OUTLINE_COLOR,
 } from '../../constants.js';
 import { renderBurbujasPersonales } from '../../personal/burbujas.js';
+import { renderCarteles } from '../../personal/carteles.js';
 import { ALFA_APAGADO, apagadoPorFiltro } from '../../personal/filtro.js';
 import { renderLuces, renderNoche } from '../../personal/luces.js';
 import { colorModelo, modeloDe } from '../../personal/personal.js';
@@ -1077,6 +1078,20 @@ export function renderFrame(
   // Area labels (above bubbles + characters, below editor overlays)
   if (showAreas) {
     renderAreaLabels(ctx, areaTiles, areas, cols, rows, offsetX, offsetY, zoom);
+  }
+  // personal: el nombre de cada sala en un cartel sobre su pared; la sala bajo el mouse se aclara
+  else if (!editor) {
+    renderCarteles(
+      ctx,
+      areaTiles,
+      areas,
+      cols,
+      rows,
+      offsetX,
+      offsetY,
+      zoom,
+      selection?.hoveredTile,
+    );
   }
 
   // Editor overlays

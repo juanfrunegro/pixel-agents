@@ -37,3 +37,10 @@ export const COLOR_VELO = 'rgba(0, 0, 0, 0.35)';
 export const COLOR_VOZ_ON = '#22c55e';
 export const COLOR_VOZ_OFF = '#6b7280';
 export const COLOR_PERILLA = '#f8fafc';
+
+/** Carteles de las salas (carteles.ts): placa oscura con texto claro; borde tenue, o del color de la sala al resaltar. */
+export const CARTEL_FONDO = '#14141f';
+export const CARTEL_TEXTO = '#e8e6f0';
+export const CARTEL_TEXTO_RESALTADO = '#ffffff';
+export const CARTEL_BORDE = '#3a3a55';
+export const SALA_ACLARADO = '#ffffff';
