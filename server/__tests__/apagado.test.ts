@@ -3,7 +3,12 @@ import * as os from 'os';
 import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { escribirApagado, leerApagado } from '../src/personal/apagado.js';
+import {
+  escribirAbrirSola,
+  escribirApagado,
+  leerAbrirSola,
+  leerApagado,
+} from '../src/personal/apagado.js';
 
 describe('personal: cuándo se apaga sola la oficina (apagado.json)', () => {
   let dir: string;
@@ -12,6 +17,18 @@ describe('personal: cuándo se apaga sola la oficina (apagado.json)', () => {
   });
   afterEach(() => {
     fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('abrir sola: prendido por defecto; apagado = la marca no-abrir-sola que lee pixel_agents.py', () => {
+    expect(leerAbrirSola(dir)).toBe(true);
+    expect(escribirAbrirSola(false, dir)).toBe(true);
+    expect(fs.existsSync(path.join(dir, 'no-abrir-sola'))).toBe(true);
+    expect(leerAbrirSola(dir)).toBe(false);
+    expect(escribirAbrirSola('no', dir)).toBe(false);
+    expect(leerAbrirSola(dir)).toBe(false);
+    expect(escribirAbrirSola(true, dir)).toBe(true);
+    expect(fs.existsSync(path.join(dir, 'no-abrir-sola'))).toBe(false);
+    expect(leerAbrirSola(dir)).toBe(true);
   });
 
   it('sin archivo: sin_pestanas (lo de siempre)', () => {

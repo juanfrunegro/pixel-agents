@@ -67,10 +67,14 @@ type OpcionApagado = (typeof OPCIONES_APAGADO)[number]['id'];
  */
 function AutoApagado() {
   const [opcion, setOpcion] = useState<OpcionApagado | null>(null);
+  const [abrirSola, setAbrirSola] = useState(true);
   useEffect(() => {
     const pedir = () => transport.send({ type: 'pedirApagado' });
     const sinMsg = transport.onMessage((msg) => {
-      if (msg.type === 'configApagado') setOpcion(msg.opcion);
+      if (msg.type === 'configApagado') {
+        setOpcion(msg.opcion);
+        setAbrirSola(msg.abrirSola);
+      }
     });
     const sinEstado = transport.onStateChange((e) => {
       if (e === 'connected') pedir();
@@ -83,28 +87,42 @@ function AutoApagado() {
   }, []);
   if (!opcion) return null;
   return (
-    <label
-      className="flex items-center gap-4 px-4 text-lg"
-      style={{ whiteSpace: 'nowrap' }}
-      title="Cuándo se apaga sola la oficina. «Sin pestañas»: solo si no hay ninguna pestaña abierta y pasan 20 min sin actividad. Con un tiempo: tras ese rato sin actividad de Claude Code, aunque esta pestaña siga abierta."
-    >
-      Se apaga sola:
-      <select
-        value={opcion}
-        onChange={(e) =>
-          transport.send({ type: 'setApagado', opcion: e.target.value as OpcionApagado })
+    <>
+      <Button
+        variant={abrirSola ? 'active' : 'default'}
+        onClick={() => transport.send({ type: 'setAbrirSola', valor: !abrirSola })}
+        title={
+          abrirSola
+            ? 'La oficina se abre sola cuando arranca un agente. Clic para que no se abra sola (a mano se sigue abriendo).'
+            : 'La oficina no se abre sola: solo a mano (favorito, Mochi o «Prender»). Clic para que vuelva a abrirse con los agentes.'
         }
-        className="bg-btn-bg hover:bg-btn-hover border-2 border-transparent rounded-none cursor-pointer py-3 px-6 text-lg"
-        style={{ color: 'inherit' }}
-        data-testid="auto-apagado"
+        data-testid="abrir-sola"
       >
-        {OPCIONES_APAGADO.map((o) => (
-          <option key={o.id} value={o.id}>
-            {o.texto}
-          </option>
-        ))}
-      </select>
-    </label>
+        {abrirSola ? 'Abrir sola: Sí' : 'Abrir sola: No'}
+      </Button>
+      <label
+        className="flex items-center gap-4 px-4 text-lg"
+        style={{ whiteSpace: 'nowrap' }}
+        title="Cuándo se apaga sola la oficina. «Sin pestañas»: solo si no hay ninguna pestaña abierta y pasan 20 min sin actividad. Con un tiempo: tras ese rato sin actividad de Claude Code, aunque esta pestaña siga abierta."
+      >
+        Se apaga sola:
+        <select
+          value={opcion}
+          onChange={(e) =>
+            transport.send({ type: 'setApagado', opcion: e.target.value as OpcionApagado })
+          }
+          className="bg-btn-bg hover:bg-btn-hover border-2 border-transparent rounded-none cursor-pointer py-3 px-6 text-lg"
+          style={{ color: 'inherit' }}
+          data-testid="auto-apagado"
+        >
+          {OPCIONES_APAGADO.map((o) => (
+            <option key={o.id} value={o.id}>
+              {o.texto}
+            </option>
+          ))}
+        </select>
+      </label>
+    </>
   );
 }
 
@@ -117,6 +135,7 @@ const SISTEMAS: Array<{ id: Sistema; texto: string; title: string }> = [
 export function BotonesPersonales() {
   const [confirmar, setConfirmar] = useState(false);
   const [apagado, setApagado] = useState(false);
+  const [abrirSola, setAbrirSola] = useState(true);
   const [recarga, setRecarga] = useState<'no' | 'pidiendo' | Exclude<Resultado, { ok: true }>>(
     'no',
   );
@@ -126,6 +145,7 @@ export function BotonesPersonales() {
     () =>
       transport.onMessage((msg) => {
         if (msg.type === 'oficinaRecargada' && !msg.error) window.location.reload();
+        if (msg.type === 'configApagado') setAbrirSola(msg.abrirSola);
       }),
     [],
   );
@@ -153,7 +173,9 @@ export function BotonesPersonales() {
   if (apagado) {
     return (
       <span className="pixel-panel px-8 py-4" style={{ fontSize: '18px' }}>
-        Pixel apagado. Prendelo con «Prender», arriba, o se prende solo con el próximo agente.
+        {abrirSola
+          ? 'Pixel apagado. Prendelo con «Prender», arriba, o se prende solo con el próximo agente.'
+          : 'Pixel apagado. Prendelo con «Prender», arriba (no se abre solo con los agentes).'}
       </span>
     );
   }

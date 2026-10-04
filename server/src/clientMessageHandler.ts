@@ -14,7 +14,12 @@ import {
 import { HUE_SHIFT_MAX_DEG, PALETTE_COUNT } from './constants.js';
 import { readLayoutFromFile, writeLayoutToFile } from './layoutPersistence.js';
 import { abrirProyecto } from './personal/abrir.js';
-import { escribirApagado, leerApagado } from './personal/apagado.js';
+import {
+  escribirAbrirSola,
+  escribirApagado,
+  leerAbrirSola,
+  leerApagado,
+} from './personal/apagado.js';
 import { mensajeContratistas } from './personal/contratistas.js';
 import { asignarOficina } from './personal/ocupacion.js';
 import {
@@ -430,7 +435,7 @@ export function handleClientMessage(
     case 'pedirApagado': {
       // Botón de apagado automático (barra de abajo): cuándo se apaga sola la oficina.
       if (!ctx.privileged) break;
-      send({ type: 'configApagado', opcion: leerApagado() });
+      send({ type: 'configApagado', opcion: leerApagado(), abrirSola: leerAbrirSola() });
       break;
     }
 
@@ -438,7 +443,15 @@ export function handleClientMessage(
       // Cambiar cuándo se apaga sola (lo aplica ~/.claude/hooks/pixel_agents.py). Solo con token.
       if (!ctx.privileged) break;
       escribirApagado(msg.opcion);
-      send({ type: 'configApagado', opcion: leerApagado() });
+      send({ type: 'configApagado', opcion: leerApagado(), abrirSola: leerAbrirSola() });
+      break;
+    }
+
+    case 'setAbrirSola': {
+      // Que la oficina se abra sola cuando arrancan agentes (lo aplica ~/.claude/hooks/pixel_agents.py). Solo con token.
+      if (!ctx.privileged) break;
+      escribirAbrirSola(msg.valor);
+      send({ type: 'configApagado', opcion: leerApagado(), abrirSola: leerAbrirSola() });
       break;
     }
 

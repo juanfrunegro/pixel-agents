@@ -6,6 +6,9 @@
  *   es antes).
  * - nunca: no se apaga sola.
  * Sin archivo o ilegible = sin_pestanas.
+ *
+ * Abrir sola (botón de al lado): si existe ~/.pixel-agents/no-abrir-sola, el hook no levanta ni abre la oficina cuando
+ * arrancan agentes; abrirla a mano (favorito, Mochi, Prender) sigue andando.
  */
 import * as fs from 'fs';
 import * as os from 'os';
@@ -33,6 +36,24 @@ export function leerApagado(carpeta = carpetaPixel()): OpcionApagado {
   } catch {
     return 'sin_pestanas';
   }
+}
+
+const NO_ABRIR_SOLA = 'no-abrir-sola';
+
+export function leerAbrirSola(carpeta = carpetaPixel()): boolean {
+  return !fs.existsSync(path.join(carpeta, NO_ABRIR_SOLA));
+}
+
+/** Prende (borra la marca) o apaga (la crea) que se abra sola. false si el valor no es booleano. */
+export function escribirAbrirSola(valor: unknown, carpeta = carpetaPixel()): boolean {
+  if (typeof valor !== 'boolean') return false;
+  const marca = path.join(carpeta, NO_ABRIR_SOLA);
+  if (valor) fs.rmSync(marca, { force: true });
+  else {
+    fs.mkdirSync(carpeta, { recursive: true });
+    fs.writeFileSync(marca, 'Apagado desde la oficina: el hook no la abre sola.\n', 'utf8');
+  }
+  return true;
 }
 
 /** Guarda la opción (escritura atómica). false si no es válida. */

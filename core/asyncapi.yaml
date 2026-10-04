@@ -167,6 +167,7 @@ components:
         - $ref: '#/components/schemas/SetConfigVoz'
         - $ref: '#/components/schemas/PedirApagado'
         - $ref: '#/components/schemas/SetApagado'
+        - $ref: '#/components/schemas/SetAbrirSola'
         - $ref: '#/components/schemas/SetWhatsappSesion'
         - $ref: '#/components/schemas/SetWhatsappProyecto'
       discriminator: type
@@ -474,21 +475,39 @@ components:
         opcion:
           $ref: '#/components/schemas/OpcionApagado'
 
+    SetAbrirSola:
+      description: >-
+        Prende o apaga que la oficina se abra sola cuando arrancan agentes (hook de ~/.claude/hooks/pixel_agents.py).
+        Apagado = existe ~/.pixel-agents/no-abrir-sola; abrirla a mano sigue andando. Contesta con configApagado. Solo
+        con token.
+      type: object
+      additionalProperties: false
+      required: [type, valor]
+      properties:
+        type:
+          const: setAbrirSola
+        valor:
+          type: boolean
+
     OpcionApagado:
       description: Cuándo se apaga sola la oficina (ver SetApagado).
       type: string
       enum: [sin_pestanas, 30m, 1h, 2h, 4h, nunca]
 
     ConfigApagado:
-      description: Cuándo se apaga sola la oficina (sin_pestanas si no hay config).
+      description: >-
+        Cuándo se apaga sola la oficina (sin_pestanas si no hay config) y si se abre sola cuando arrancan agentes (ver
+        SetAbrirSola).
       type: object
       additionalProperties: false
-      required: [type, opcion]
+      required: [type, opcion, abrirSola]
       properties:
         type:
           const: configApagado
         opcion:
           $ref: '#/components/schemas/OpcionApagado'
+        abrirSola:
+          type: boolean
 
     OficinasEstado:
       description: Qué proyecto ocupa cada oficina asignable (null = libre) y qué proyectos de Orca se pueden asignar.
