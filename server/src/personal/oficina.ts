@@ -415,6 +415,8 @@ interface MuebleRelativo {
   type: string;
   dx: number;
   dy: number;
+  /** Ajuste de color del motor (tono, saturación, brillo, contraste), por ejemplo para oscurecer la madera. */
+  color?: { h: number; s: number; b: number; c: number };
 }
 
 /** Color de alfombra del motor (CarpetTile.color / accentColor): tono, saturación, brillo y contraste. */
@@ -458,10 +460,16 @@ const PARED_ARRIBA = -2;
  * Escritorio con dueño por rol (manager o CEO): el escritorio y la PC de siempre, con silla en vez de banco. La silla
  * queda reservada (esAsientoReservado) y el webview le pone una placa con el nombre.
  */
-function escritorioDeRol(m: MuebleRelativo[], rol: string, dx: number, dy: number): void {
+function escritorioDeRol(
+  m: MuebleRelativo[],
+  rol: string,
+  dx: number,
+  dy: number,
+  silla = 'CUSHIONED_CHAIR_BACK',
+): void {
   m.push({ id: `${rol}-escritorio`, type: 'DESK_FRONT', dx, dy });
   m.push({ id: `${rol}-pc`, type: 'PC_FRONT_OFF', dx: dx + 1, dy });
-  m.push({ id: `${rol}-silla`, type: 'CUSHIONED_CHAIR_BACK', dx: dx + 1, dy: dy + 2 });
+  m.push({ id: `${rol}-silla`, type: silla, dx: dx + 1, dy: dy + 2 });
 }
 
 /**
@@ -496,14 +504,17 @@ function oficina(conMesaContable: boolean): Contenido {
 
 /**
  * Brain, en el centro: la oficina del CEO. Arriba al centro, el escritorio del CEO (adonde va la sesión mientras un
- * manager trabaja para ella); los otros cinco, como una oficina; plantas y lugar en la pared.
+ * manager trabaja para ella), con sillón de cuero, alfombra y lámpara de pie; los otros cinco, como una oficina; un
+ * minibar en la esquina, plantas y lugar en la pared.
  */
 function brain(): Contenido {
   const m: MuebleRelativo[] = [];
   for (const dy of [0, 3]) {
     for (const dx of [3, 7, 11]) {
       if (dy === 0 && dx === 7) {
-        escritorioDeRol(m, 'ceo', dx, dy);
+        escritorioDeRol(m, 'ceo', dx, dy, 'CEO_CHAIR');
+        // Escritorio de nogal: la misma madera, más oscura.
+        m[m.length - 3].color = { h: -8, s: 5, b: -30, c: 15 };
         continue;
       }
       const k = `${dy}-${dx}`;
@@ -514,7 +525,9 @@ function brain(): Contenido {
   }
   m.push({ id: 'planta-1', type: 'PLANT', dx: 0, dy: 0 });
   m.push({ id: 'planta-2', type: 'PLANT_2', dx: 0, dy: 4 });
-  m.push({ id: 'planta-grande', type: 'LARGE_PLANT', dx: 16, dy: 0 });
+  m.push({ id: 'lampara', type: 'LAMPARA', dx: 10, dy: 0 });
+  m.push({ id: 'minibar', type: 'MINIBAR', dx: 17, dy: 0 });
+  m.push({ id: 'planta-grande', type: 'LARGE_PLANT', dx: 17, dy: 4 });
   m.push({ id: 'cuadro', type: 'LARGE_PAINTING', dx: 17, dy: PARED_ARRIBA });
   m.push({ id: 'reloj', type: 'CLOCK', dx: 13, dy: PARED_ARRIBA });
   // La pizarra de pendientes (tres pizarrones juntos; el webview escribe encima, ver webview-ui/src/personal/pizarra.ts).
@@ -525,7 +538,22 @@ function brain(): Contenido {
   ] as const) {
     m.push({ id: `pizarra-${n}`, type: 'WHITEBOARD', dx, dy: PARED_ARRIBA });
   }
-  return { muebles: m, puertas: [1, 15] };
+  return {
+    muebles: m,
+    puertas: [1, 15],
+    // Alfombra verde con filete dorado bajo el escritorio y el sillón del CEO.
+    alfombras: [
+      {
+        dx: 6,
+        dy: 0,
+        w: 5,
+        h: 3,
+        variant: 0,
+        color: tono(135, 75, -40),
+        accentColor: tono(45, 70, 10),
+      },
+    ],
+  };
 }
 
 /**
@@ -814,6 +842,7 @@ export function generarLayout(
           type: f.type,
           col: x + 1 + f.dx,
           row: filaPared + 1 + f.dy,
+          ...(f.color ? { color: f.color } : {}),
         });
       }
       x += p.ancho;

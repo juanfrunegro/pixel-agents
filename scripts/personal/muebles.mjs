@@ -30,6 +30,23 @@ const C = {
   celeste: '#4fa8e0',
   violeta: '#9b6fd6',
   rosa: '#e07ab8',
+  cuero: '#2f6b52',
+  cueroOscuro: '#1f4a39',
+  cueroBrillo: '#4f9677',
+  dorado: '#e8c547',
+  doradoOscuro: '#b8932a',
+  pantalla: '#f3e3b5',
+  pantallaSombra: '#d9bf86',
+  marmol: '#ece7df',
+  marmolVeta: '#cfc8bd',
+  acero: '#c9ced6',
+  aceroOscuro: '#8d939e',
+  vidrio: '#2a3440',
+  vinoVerde: '#2e6b3a',
+  ambar: '#c27c2c',
+  tinto: '#7a1f2b',
+  gin: '#3c7fb0',
+  claro: '#d8e8ec',
 };
 
 /** Lienzo de w×h píxeles transparentes con helpers de dibujo. */
@@ -38,12 +55,13 @@ function lienzo(w, h) {
   png.data.fill(0);
   const px = (x, y, color) => {
     if (x < 0 || y < 0 || x >= w || y >= h) return;
-    const n = parseInt(color.slice(1), 16);
+    // #rrggbb o #rrggbbaa (con transparencia).
+    const n = parseInt(color.slice(1, 7), 16);
     const i = (y * w + x) * 4;
     png.data[i] = (n >> 16) & 255;
     png.data[i + 1] = (n >> 8) & 255;
     png.data[i + 2] = n & 255;
-    png.data[i + 3] = 255;
+    png.data[i + 3] = color.length > 7 ? parseInt(color.slice(7, 9), 16) : 255;
   };
   const rect = (x, y, rw, rh, color) => {
     for (let j = y; j < y + rh; j++) for (let i = x; i < x + rw; i++) px(i, j, color);
@@ -148,5 +166,168 @@ function mural() {
   });
 }
 
+// ── Oficina del CEO (Brain) ───────────────────────────────────────
+
+/**
+ * Sillón del CEO (1×1, de espaldas: el CEO mira a su escritorio): respaldo alto de cuero verde con alas, tachas doradas
+ * en el borde y patas de madera con punta de bronce. Es una silla (category chairs, orientation back) para que siga siendo
+ * el asiento reservado del CEO.
+ */
+function sillonCeo() {
+  const { png, px, rect, caja } = lienzo(16, 16);
+  // Alas a los costados del respaldo.
+  caja(0, 3, 16, 9, C.cueroOscuro);
+  // Respaldo alto, con el borde de arriba redondeado.
+  caja(2, 0, 12, 12, C.cuero);
+  px(2, 0, '#00000000');
+  px(13, 0, '#00000000');
+  rect(3, 1, 10, 1, C.cueroBrillo);
+  rect(3, 2, 1, 8, C.cueroBrillo);
+  // Tachas doradas siguiendo el borde.
+  for (let x = 4; x <= 11; x += 2) px(x, 2, C.dorado);
+  for (let y = 4; y <= 9; y += 2) {
+    px(3, y, C.dorado);
+    px(12, y, C.dorado);
+  }
+  // Asiento (se asoma abajo del respaldo) con ribete dorado.
+  caja(1, 11, 14, 3, C.cueroOscuro);
+  rect(2, 12, 12, 1, C.cuero);
+  rect(2, 11, 12, 1, C.doradoOscuro);
+  // Patas de madera con punta de bronce.
+  rect(2, 14, 2, 2, C.maderaOscura);
+  rect(12, 14, 2, 2, C.maderaOscura);
+  px(2, 15, C.dorado);
+  px(13, 15, C.dorado);
+  guardar('CEO_CHAIR', png, {
+    name: 'Sillón del CEO',
+    category: 'chairs',
+    type: 'asset',
+    orientation: 'back',
+    canPlaceOnWalls: false,
+    canPlaceOnSurfaces: false,
+    backgroundTiles: 0,
+    footprintW: 1,
+    footprintH: 1,
+  });
+}
+
+/** Lámpara de pie (1×2, ocupa solo la fila de abajo): pantalla de tela con luz cálida, caño de bronce y base. */
+function lampara() {
+  const { png, px, rect, caja } = lienzo(16, 32);
+  // Halo de luz alrededor de la pantalla.
+  for (let y = 1; y < 14; y++)
+    for (let x = 1; x < 15; x++) {
+      const d = Math.hypot(x - 7.5, y - 7);
+      if (d < 7) px(x, y, d < 4.5 ? '#fff2c040' : '#fff2c020');
+    }
+  // Pantalla: trapecio, más angosta arriba.
+  for (let y = 3; y <= 10; y++) {
+    const medio = 2 + Math.floor((y - 3) / 2);
+    rect(8 - medio, y, medio * 2, 1, C.pantalla);
+    px(8 - medio - 1, y, C.negro);
+    px(8 + medio, y, C.negro);
+  }
+  rect(5, 2, 6, 1, C.negro);
+  rect(2, 11, 12, 1, C.negro);
+  rect(3, 10, 10, 1, C.pantallaSombra);
+  rect(6, 4, 1, 5, '#fffaf0');
+  // Caño de bronce.
+  rect(7, 12, 2, 16, C.doradoOscuro);
+  rect(7, 12, 1, 16, C.dorado);
+  // Base.
+  caja(4, 27, 8, 3, C.gris);
+  rect(5, 27, 6, 1, C.aceroOscuro);
+  rect(3, 30, 10, 1, '#00000040');
+  guardar('LAMPARA', png, {
+    name: 'Lámpara de pie',
+    category: 'decor',
+    type: 'asset',
+    canPlaceOnWalls: false,
+    canPlaceOnSurfaces: false,
+    backgroundTiles: 1,
+    footprintW: 1,
+    footprintH: 2,
+  });
+}
+
+/**
+ * Minibar (2×2): arriba, un estante de madera con botellas y copas contra la pared; abajo, la barra con mesada de
+ * mármol, un cajón con tiradores dorados y una heladerita con puerta de vidrio.
+ */
+function minibar() {
+  const { png, px, rect, caja } = lienzo(32, 32);
+  // Estante: marco de madera con fondo bordó y dos repisas.
+  caja(1, 0, 30, 14, C.bordo, C.negro);
+  rect(2, 1, 28, 1, C.maderaOscura);
+  rect(2, 7, 28, 1, C.madera);
+  rect(2, 12, 28, 1, C.madera);
+  // Botellas (cuerpo + cuello) en las dos repisas.
+  const botella = (x, yBase, color, alta = 5) => {
+    rect(x, yBase - alta, 2, alta, color);
+    px(x, yBase - alta - 1, color);
+    px(x, yBase - alta - 2, C.negro);
+    px(x + 1, yBase - alta + 1, '#ffffff60');
+  };
+  [
+    [3, C.vinoVerde],
+    [6, C.tinto],
+    [9, C.ambar],
+    [12, C.gin],
+    [15, C.claro],
+  ].forEach(([x, color]) => botella(x, 7, color, 4));
+  [
+    [19, C.ambar],
+    [22, C.vinoVerde],
+    [25, C.tinto],
+  ].forEach(([x, color]) => botella(x, 7, color, 4));
+  // Copas en la repisa de abajo.
+  for (const x of [4, 8, 12, 16]) {
+    rect(x, 9, 3, 2, C.claro);
+    px(x + 1, 11, C.claro);
+    px(x + 1, 9, '#ffffff');
+  }
+  botella(22, 12, C.ambar, 3);
+  botella(26, 12, C.tinto, 3);
+  // Mesada de mármol con canto dorado.
+  caja(0, 14, 32, 4, C.marmol);
+  rect(3, 15, 6, 1, C.marmolVeta);
+  rect(17, 16, 8, 1, C.marmolVeta);
+  rect(1, 17, 30, 1, C.doradoOscuro);
+  // Cuerpo de la barra: madera oscura con un cajón y tiradores dorados.
+  caja(0, 18, 32, 13, C.maderaOscura);
+  rect(1, 19, 30, 1, C.madera);
+  caja(2, 20, 14, 10, C.madera, C.bordo);
+  rect(3, 21, 12, 1, C.maderaClara);
+  rect(8, 24, 2, 1, C.dorado);
+  // Heladerita: acero con puerta de vidrio y latitas adentro.
+  caja(17, 19, 13, 12, C.acero, C.negro);
+  caja(18, 20, 10, 9, C.vidrio, C.aceroOscuro);
+  for (const [x, color] of [
+    [19, C.rojo],
+    [21, C.verde],
+    [23, C.celeste],
+    [25, C.amarillo],
+  ])
+    rect(x, 26, 1, 2, color);
+  rect(19, 23, 8, 1, C.aceroOscuro);
+  rect(28, 22, 1, 4, C.aceroOscuro);
+  px(19, 21, '#ffffff50');
+  // Sombra en el piso.
+  rect(0, 31, 32, 1, '#00000040');
+  guardar('MINIBAR', png, {
+    name: 'Minibar',
+    category: 'misc',
+    type: 'asset',
+    canPlaceOnWalls: false,
+    canPlaceOnSurfaces: false,
+    backgroundTiles: 1,
+    footprintW: 2,
+    footprintH: 2,
+  });
+}
+
 mesaLuz();
 mural();
+sillonCeo();
+lampara();
+minibar();
