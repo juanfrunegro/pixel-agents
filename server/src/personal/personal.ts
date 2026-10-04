@@ -158,14 +158,20 @@ export interface Definicion {
   permiso?: Permiso;
 }
 
-/** lee = sin Edit/Write; escribe = Edit/Write; todo = sin `tools:` (hereda todas). */
+/** lee = sin Edit/Write ni MCPs que escriben; escribe = Edit/Write o un MCP que crea/cambia/borra; todo = sin `tools:` (hereda todas). */
 export type Permiso = 'lee' | 'escribe' | 'todo';
 
 export function permisoDe(tools: string | undefined): Permiso {
   if (!tools) return 'todo';
-  return /\b(Edit|Write|NotebookEdit|MultiEdit)\b/.test(tools.replace(/Agent\([^)]*\)/, ''))
-    ? 'escribe'
-    : 'lee';
+  const propias = tools.replace(/Agent\([^)]*\)/, '');
+  const archivos = /\b(Edit|Write|NotebookEdit|MultiEdit)\b/.test(propias);
+  // Escribir afuera por un MCP (crear o cambiar flujos de n8n, aplicar migraciones…) también es
+  // escribir. El verbo tiene que ser una palabra entera: `…_adsets` no es "set".
+  const mcp =
+    /mcp__[^,\s]*?[_-](create|update|delete|apply|deploy|upsert|merge|send|set)(?=[_,\s]|$)/i.test(
+      propias,
+    );
+  return archivos || mcp ? 'escribe' : 'lee';
 }
 
 /** Un perfil de Codex (`~/.claude/codex-perfiles/<nombre>.config.toml`): el "agente" de Codex. */

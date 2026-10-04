@@ -122,6 +122,20 @@ describe('personal: organigrama', () => {
     expect(permisoDe(undefined)).toBe('todo');
     expect(permisoDe('Read, Grep, Glob, Bash')).toBe('lee');
     expect(permisoDe('Read, Edit, Write')).toBe('escribe');
+    // Escribir afuera por un MCP también es escribir (n8n-automatizador); leer por MCP, no.
+    expect(
+      permisoDe('Read, mcp__n8n-mcp__n8n_get_workflow, mcp__n8n-mcp__n8n_create_workflow'),
+    ).toBe('escribe');
+    expect(permisoDe('Read, mcp__supabase__apply_migration')).toBe('escribe');
+    expect(
+      permisoDe('Read, mcp__supabase-lectura__execute_sql, mcp__supabase-lectura__list_tables'),
+    ).toBe('lee');
+    // Nombres reales de analista-marketing que contienen "set" o "update" sin ser ese verbo.
+    expect(
+      permisoDe(
+        'Read, mcp__meta-ads__ads_get_custom_audience_adsets, mcp__meta-ads__ads_get_ad_account_custom_audiences',
+      ),
+    ).toBe('lee');
     // Un manager que puede lanzar a un agente que escribe no escribe él.
     expect(permisoDe('Read, Agent(corrector, Write)')).toBe('lee');
     expect(leerPerfilCodex('sandbox_mode = "workspace-write"', 'x').permiso).toBe('escribe');
