@@ -25,6 +25,10 @@ export const EXTERNAL_ACTIVE_THRESHOLD_MS = 120_000; // 2 minutes
 /** Remove external agents after this much inactivity */
 // export const EXTERNAL_STALE_TIMEOUT_MS = 300_000; // 5 minutes - deprecated
 export const EXTERNAL_STALE_CHECK_INTERVAL_MS = 30_000;
+/** Personal: al restaurar se saltean las sesiones cuyo transcript no cambió en este plazo. Una sesión cerrada
+ *  sin SessionEnd (terminal cerrada de golpe, WSL) quedaba guardada para siempre y volvía en cada arranque. Si se
+ *  retoma, el escaneo externo la vuelve a adoptar en cuanto tiene actividad. */
+export const RESTORE_MAX_IDLE_MS = 60 * 60_000; // 1 hora
 /** Cooldown after user closes an agent via X. Must be > EXTERNAL_ACTIVE_THRESHOLD_MS
  *  so the file's mtime becomes stale before the dismissal expires. */
 export const DISMISSED_COOLDOWN_MS = 180_000; // 3 minutes

@@ -47,6 +47,7 @@ import type { DismissalTracker } from './dismissalTracker.js';
 import { assignPaletteIfNeeded } from './paletteAssigner.js';
 import { pathsMatch } from './pathKey.js';
 import { anotarDormido, olvidarNoVistos, saltearDormido } from './personal/escaneo.js';
+import { sesionTerminada } from './personal/terminada.js';
 import type { SubagentWatch } from './subagentWatch.js';
 import { cancelPermissionTimer, cancelWaitingTimer, clearAgentActivity } from './timerManager.js';
 import { getHookProvider, processTranscriptLine } from './transcriptParser.js';
@@ -1429,6 +1430,7 @@ export function scanExternalDir(
     } catch {
       continue;
     }
+    if (sesionTerminada(file)) continue; // personal: sesión cerrada (ver personal/terminada.ts)
 
     // Content check with two-tick delay for /clear files:
     // First tick: skip /clear files (give per-agent 3s to claim for internal /clear).
@@ -1542,6 +1544,7 @@ function scanGlobalProjectDirs(
       } catch {
         continue;
       }
+      if (sesionTerminada(file)) continue; // personal: sesión cerrada (ver personal/terminada.ts)
 
       const folderName =
         folderNameResolver?.({ projectDir: dirPath }) ??
@@ -1593,7 +1596,10 @@ export function startStaleExternalAgentCheck(
       } catch {
         // File deleted — remove agent
         toRemove.push(id);
+        continue;
       }
+      // personal: la sesión se cerró (cost-state al final). Sin hooks no llega SessionEnd: era un fantasma.
+      if (sesionTerminada(agent.jsonlFile)) toRemove.push(id);
     }
 
     for (const id of toRemove) {

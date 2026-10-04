@@ -14,7 +14,7 @@ import * as path from 'path';
 
 import type { HookProvider } from '../../core/src/provider.js';
 import type { AgentStateStore } from './agentStateStore.js';
-import { DEFAULT_MAX_CONTEXT_TOKENS } from './constants.js';
+import { DEFAULT_MAX_CONTEXT_TOKENS, RESTORE_MAX_IDLE_MS } from './constants.js';
 import { DismissalTracker } from './dismissalTracker.js';
 import {
   adoptExternalSessionFromHook,
@@ -39,6 +39,7 @@ import { HookEventHandler } from './hookEventHandler.js';
 import { assignPaletteIfNeeded } from './paletteAssigner.js';
 import { PathSet, pathsMatch } from './pathKey.js';
 import { proyectoDe } from './personal/personal.js';
+import { sesionTerminada } from './personal/terminada.js';
 import { SessionRouter } from './sessionRouter.js';
 import { SubagentWatch } from './subagentWatch.js';
 import { cancelPermissionTimer, cancelWaitingTimer } from './timerManager.js';
@@ -473,16 +474,19 @@ export class AgentRuntime {
       // is live. Restoring them directly would resurrect immortal characters
       // (also skips stale entries written by older builds that persisted them).
       if (p.leadAgentId !== undefined && !p.teamName) continue;
-      try {
-        if (!fs.existsSync(p.jsonlFile)) continue;
-      } catch {
-        continue;
-      }
       if (this.store.has(p.id)) {
         this.knownJsonlFiles.add(p.jsonlFile);
         if (p.id > maxId) maxId = p.id;
         continue;
       }
+      // personal: la que no existe o lleva más de RESTORE_MAX_IDLE_MS sin cambiar no vuelve (sesión muerta). No
+      // entra en knownJsonlFiles, así que el escaneo externo la adopta de nuevo si se retoma.
+      try {
+        if (Date.now() - fs.statSync(p.jsonlFile).mtimeMs > RESTORE_MAX_IDLE_MS) continue;
+      } catch {
+        continue;
+      }
+      if (sesionTerminada(p.jsonlFile)) continue; // personal: se cerró (ver personal/terminada.ts)
 
       const agent: AgentState = {
         id: p.id,

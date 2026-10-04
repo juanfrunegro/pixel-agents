@@ -156,6 +156,46 @@ describe('AgentRuntime -- restore preserves palette/hueShift', () => {
     expect(restored?.hueShift).toBe(270);
   });
 
+  it('personal: no restaura una sesión sin cambios hace más de una hora', () => {
+    const viejo = path.join(tmpDir, 'vieja.jsonl');
+    fs.writeFileSync(viejo, '');
+    const dosHoras = (Date.now() - 2 * 60 * 60_000) / 1000;
+    fs.utimesSync(viejo, dosHoras, dosHoras);
+    const base = { terminalName: '', isExternal: true, projectDir: tmpDir };
+    const store = new AgentStateStore();
+    store.setAdapter(
+      createMockAdapter([
+        { ...base, id: 11, sessionId: 'viva', jsonlFile: jsonlPath },
+        { ...base, id: 12, sessionId: 'vieja', jsonlFile: viejo },
+      ]),
+    );
+    runtime = new AgentRuntime(store, claudeProvider);
+
+    runtime.restoreExternalAgents();
+
+    expect(store.has(11)).toBe(true);
+    expect(store.has(12)).toBe(false);
+  });
+
+  it('personal: no restaura una sesión que se cerró (cost-state al final)', () => {
+    const cerrada = path.join(tmpDir, 'cerrada.jsonl');
+    fs.writeFileSync(cerrada, '{"type":"user"}\n{"type":"cost-state","sessionId":"cerrada"}\n');
+    const base = { terminalName: '', isExternal: true, projectDir: tmpDir };
+    const store = new AgentStateStore();
+    store.setAdapter(
+      createMockAdapter([
+        { ...base, id: 21, sessionId: 'viva', jsonlFile: jsonlPath },
+        { ...base, id: 22, sessionId: 'cerrada', jsonlFile: cerrada },
+      ]),
+    );
+    runtime = new AgentRuntime(store, claudeProvider);
+
+    runtime.restoreExternalAgents();
+
+    expect(store.has(21)).toBe(true);
+    expect(store.has(22)).toBe(false);
+  });
+
   it('assigns a fresh palette when the persisted record has no palette', () => {
     const persisted: PersistedAgent[] = [
       {
