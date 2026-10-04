@@ -20,11 +20,14 @@ import {
 describe('configPersistence: areas', () => {
   let tempHome: string;
   let originalHome: string | undefined;
+  let originalUserProfile: string | undefined;
 
   beforeEach(() => {
     tempHome = fs.mkdtempSync(path.join(os.tmpdir(), 'pxl-config-test-'));
     originalHome = process.env.HOME;
     process.env.HOME = tempHome;
+    originalUserProfile = process.env.USERPROFILE;
+    process.env.USERPROFILE = tempHome; // Windows: os.homedir() sale de USERPROFILE
   });
 
   afterEach(() => {
@@ -33,6 +36,8 @@ describe('configPersistence: areas', () => {
     } else {
       process.env.HOME = originalHome;
     }
+    if (originalUserProfile === undefined) delete process.env.USERPROFILE;
+    else process.env.USERPROFILE = originalUserProfile;
     fs.rmSync(tempHome, { recursive: true, force: true });
   });
 

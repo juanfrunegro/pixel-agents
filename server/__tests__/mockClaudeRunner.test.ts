@@ -54,6 +54,7 @@ function runMockClaude(
       env: {
         ...process.env,
         HOME: tmpHome,
+        USERPROFILE: tmpHome, // Windows: os.homedir() sale de USERPROFILE
       },
       stdio: ['ignore', 'ignore', 'pipe'],
     });

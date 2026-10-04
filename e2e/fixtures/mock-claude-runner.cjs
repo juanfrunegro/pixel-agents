@@ -202,7 +202,8 @@ function readSettings(homeDir) {
 }
 
 function normalizePathForMatch(value) {
-  return String(value).replace(/\\/g, '/');
+  // Windows: un comando armado con JSON.stringify trae las barras dobladas (C:\\Users); colapsarlas.
+  return String(value).replace(/\\/g, '/').replace(/\/{2,}/g, '/');
 }
 
 function isPixelAgentsHookCommand(homeDir, command) {

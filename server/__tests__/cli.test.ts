@@ -421,7 +421,8 @@ describe('dist/cli.js entry-point guard', () => {
         string,
         unknown
       >;
-      expect(JSON.stringify(settings)).toContain(installedHook);
+      // Dentro del JSON las barras de Windows van escapadas (\\): comparar con la ruta escapada igual.
+      expect(JSON.stringify(settings)).toContain(JSON.stringify(installedHook).slice(1, -1));
     } finally {
       await stopChild(child);
       fs.rmSync(tmpHome, { recursive: true, force: true });
