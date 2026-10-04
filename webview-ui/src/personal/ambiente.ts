@@ -8,7 +8,8 @@
  *    por vez; los que avisan mientras otro habla esperan su turno sentados en la sala (enFilaDe).
  * 3b. En una reunión (reuniones.ts): va a una silla de Reuniones, al lado del otro, y cuando llegan hablan.
  * 4. Sin uso (terminó el turno, espera tu próximo mensaje, o una sesión restaurada sin nada en curso; ver enUso en
- *    personal.ts): se va a la Cafetería y se sienta; si no hay sillones libres, se queda parado ahí. Vuelve en cuanto
+ *    personal.ts): si terminó hablando por voz se queda sentado en Presentaciones (así se ve quién te habló); si no, se
+ *    va a la Cafetería y se sienta; si no hay sillones libres, se queda parado ahí. Vuelve en cuanto
  *    arranca a trabajar. Los sub-agentes no van: desaparecen al terminar.
  * 5. Trabajando: va al lugar de lo que está haciendo (biblioteca, atril, pizarrón, mesa contable; ver lugares.ts) o a
  *    su escritorio para escribir código. Se queda al menos PERMANENCIA_MS en cada lugar para no ir y venir con cada
@@ -44,6 +45,7 @@ import {
   dormidoDe,
   enFilaDe,
   enUso,
+  habloRecienDe,
   padreDe,
   podarPersonal,
   presentandoDe,
@@ -368,7 +370,10 @@ export function tickPersonal(os: OfficeState, ahora = Date.now()): void {
       if (ch.lugar !== 'fila') ir(os, ch, 'fila', ahora);
       continue;
     }
-    if (ch.lugar === 'presentacion' || ch.lugar === 'fila') alEscritorio(ch); // terminó de presentar
+    // Terminó de presentar: si sigue sin trabajar se queda sentado en Presentaciones (regla 4); si no, a lo suyo.
+    const seQuedaEnPresentaciones = !ch.isSubagent && !enUso(ch, ahora) && habloRecienDe(ch.id);
+    if (ch.lugar === 'presentacion' || (ch.lugar === 'fila' && !seQuedaEnPresentaciones))
+      alEscritorio(ch);
 
     // 3b. Reunión.
     const r = reunionDe(ch.id, ahora);
@@ -391,9 +396,14 @@ export function tickPersonal(os: OfficeState, ahora = Date.now()): void {
         if (ch.lugar !== undefined) alEscritorio(ch);
         continue;
       }
+      if (seQuedaEnPresentaciones) {
+        if (ch.lugar !== 'fila') ir(os, ch, 'fila', ahora);
+        continue;
+      }
       if (ch.lugar !== 'cafeteria') ir(os, ch, 'cafeteria', ahora);
       continue;
     }
+    if (ch.lugar === 'fila') alEscritorio(ch); // volvió a trabajar
 
     // 5. Trabajando.
     if (ch.lugar === 'cafeteria') alEscritorio(ch); // se puso a trabajar: vuelve ya, sin esperar

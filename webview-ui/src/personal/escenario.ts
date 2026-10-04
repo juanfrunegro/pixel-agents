@@ -1,7 +1,6 @@
 /**
  * Personal (copia de juanfrunegro): el escenario de Presentaciones. Una tarima de madera frente a las pantallas, con un
- * micrófono al centro (donde se para el que dice su aviso por voz, ver puntosDePresentacion) y dos pies de micrófono a
- * los costados. Se dibuja en el canvas (no hay sprites de escenario): la tarima debajo de los personajes y el micrófono
+ * solo micrófono al centro (donde se para el que dice su aviso por voz, de a uno; ver puntosDePresentacion). Se dibuja en el canvas (no hay sprites de escenario): la tarima debajo de los personajes y el micrófono
  * del centro encima, para que quede delante del que habla.
  */
 import { ESCENARIO_FILA, SALA_PRESENTACIONES } from '../../../core/src/salasComunes.js';
@@ -60,7 +59,7 @@ function pieDeMicrofono(
   ctx.fillRect(x - g, yPiso - alto - 2 * g, 3 * g, 3 * g); // cabeza
 }
 
-/** La tarima y los micrófonos de los costados: debajo de los personajes. */
+/** La tarima: debajo de los personajes. */
 export function renderEscenario(
   ctx: CanvasRenderingContext2D,
   areaTiles: Array<string | null> | undefined,
@@ -90,12 +89,6 @@ export function renderEscenario(
   // Frente de la tarima (el borde que se ve desde el público).
   ctx.fillStyle = ESCENARIO_BORDE;
   ctx.fillRect(x, y + alto - Math.round(s / 4), ancho, Math.round(s / 4));
-  // Micrófonos de los costados.
-  const piso = y + alto - Math.round(s / 4);
-  for (const c of [e.col - 2, e.col + 2]) {
-    if (c < e.c0 || c > e.c1) continue;
-    pieDeMicrofono(ctx, Math.round(offsetX + (c + 0.5) * s), piso, zoom, Math.round(s * 0.8));
-  }
   ctx.restore();
 }
 

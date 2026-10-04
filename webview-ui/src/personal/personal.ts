@@ -535,6 +535,19 @@ export function presentandoDe(charId: number, ahora = Date.now()): boolean {
   return turnosAhora(ahora).get(charId) === 'escenario';
 }
 
+/**
+ * Su último turno terminó con un aviso por voz y todavía no volvió a trabajar: se queda sentado en Presentaciones, así
+ * se ve quién te habló. El aviso llega al final del turno (después de su última actividad); un turno posterior sin voz
+ * deja la actividad más nueva que el aviso y vuelve a la cafetería.
+ */
+export function habloRecienDe(charId: number): boolean {
+  if (estado.subs.has(charId)) return false;
+  const p = estado.info.get(charId)?.presento;
+  if (typeof p !== 'number') return false;
+  const t = estado.actividad.get(charId);
+  return t === undefined || p >= t - 30_000;
+}
+
 /** Dijo su aviso pero otro está en el escenario: espera su turno sentado en la fila. */
 export function enFilaDe(charId: number, ahora = Date.now()): boolean {
   if (estado.subs.has(charId)) return false;

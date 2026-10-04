@@ -185,7 +185,7 @@ describe('escritorio de un sub-agente', () => {
 });
 
 describe('presentando', () => {
-  it('después del aviso por voz va a Presentaciones en vez de la cafetería, y después vuelve', () => {
+  it('después del aviso por voz sube al escenario y después se queda sentado en Presentaciones (no a la cafetería)', () => {
     _reiniciarBases();
     alMensaje({ type: 'agentInfo', id: 350, voz: false, presento: ahora });
     const ch = personaje(350, { seatId: 'a', isActive: false });
@@ -193,7 +193,15 @@ describe('presentando', () => {
     tickPersonal(os, ahora + 1000);
     expect(ch.lugar).toBe('presentacion');
     tickPersonal(os, ahora + PRESENTACION_MS + 1);
-    expect(ch.lugar).toBe('cafeteria');
+    expect(ch.lugar).toBe('fila');
+  });
+
+  it('el que habló vuelve a la cafetería después de un turno nuevo sin voz', async () => {
+    const { habloRecienDe } = await import('../src/personal/personal.js');
+    alMensaje({ type: 'agentInfo', id: 351, voz: false, presento: Date.now() - 120_000 });
+    expect(habloRecienDe(351)).toBe(true);
+    alMensaje({ type: 'agentToolStart', id: 351, toolId: 't1', status: 'Reading x' });
+    expect(habloRecienDe(351)).toBe(false);
   });
 });
 
