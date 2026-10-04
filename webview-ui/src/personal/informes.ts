@@ -147,3 +147,59 @@ export function _reiniciarInformes(): void {
   abierto = null;
   leidos = leerLeidos();
 }
+
+// ── Para leerlo cómodo (PanelInforme.tsx) ────────────────────────
+
+export interface Seccion {
+  titulo: string;
+  /** Texto suelto (la línea de la etiqueta y las que siguen sin viñeta). */
+  parrafos: string[];
+  /** Viñetas ("- …"). */
+  vinetas: string[];
+}
+
+/** Etiqueta del informe ("Resultado: …"): sin viñeta, empieza en mayúscula y termina en dos puntos. */
+const ETIQUETA = /^([A-ZÁÉÍÓÚ¿][^:\n]{1,40}):\s*(.*)$/;
+
+/**
+ * El informe partido en secciones por sus etiquetas, sin el encabezado "## Informe de…" y sin las que el panel ya
+ * muestra arriba (`omitir`: Estado y la decisión). Lo de antes de la primera etiqueta va en una sección sin título.
+ */
+export function seccionesDe(
+  texto: string,
+  omitir: RegExp = /^(Estado|Decisi[oó]n que necesito)/i,
+): Seccion[] {
+  const out: Seccion[] = [];
+  let actual: Seccion = { titulo: '', parrafos: [], vinetas: [] };
+  const cerrar = () => {
+    if (!omitir.test(actual.titulo) && (actual.parrafos.length || actual.vinetas.length)) {
+      out.push(actual);
+    }
+  };
+  for (const cruda of texto.split(/\r?\n/)) {
+    const l = cruda.trim();
+    if (!l || /^#/.test(l)) continue;
+    const vineta = /^[-*•]\s+(.*)$/.exec(l);
+    if (vineta) {
+      actual.vinetas.push(vineta[1]);
+      continue;
+    }
+    const m = ETIQUETA.exec(l);
+    if (m && !/^https?$/i.test(m[1])) {
+      cerrar();
+      actual = { titulo: m[1].trim(), parrafos: m[2] ? [m[2]] : [], vinetas: [] };
+      continue;
+    }
+    actual.parrafos.push(l);
+  }
+  cerrar();
+  return out;
+}
+
+/** Color del estado: verde aprobado, ámbar con cambios, rojo rechazado o escalado. */
+export function tonoEstado(estado: string): 'ok' | 'cambios' | 'mal' | 'nada' {
+  if (/RECHAZADO|ESCALADO/i.test(estado)) return 'mal';
+  if (/CAMBIOS/i.test(estado)) return 'cambios';
+  if (/APROBADO/i.test(estado)) return 'ok';
+  return 'nada';
+}

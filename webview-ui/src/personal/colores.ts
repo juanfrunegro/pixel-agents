@@ -70,3 +70,8 @@ export const PARLANTE_BORDE = '#141418';
 export const PARLANTE_CONO = '#555a66';
 export const PARLANTE_CENTRO = '#a9aebb';
 export const PARLANTE_ONDA = '#f2d24b';
+/** Panel del informe de un manager: títulos de sección, código entre comillas invertidas y estado. */
+export const INFORME_TITULO = '#a9b4d0';
+export const INFORME_CODIGO_FONDO = 'rgba(255, 255, 255, 0.08)';
+export const INFORME_CODIGO_TEXTO = '#9fd3ff';
+export const INFORME_OK = '#22c55e';

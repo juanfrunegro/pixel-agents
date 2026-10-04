@@ -1,11 +1,20 @@
 /**
  * Personal (copia de juanfrunegro): el último informe de un manager (clic en su escritorio, o en el del CEO cuando el
- * semáforo titila). Arriba lo que importa para decidir (estado y la decisión que pide); abajo el informe entero.
+ * semáforo titila). Arriba el estado (con su color) y la decisión que pide; abajo el resto, una sección por etiqueta
+ * del informe (seccionesDe), con las viñetas como lista y lo que va entre `comillas` resaltado.
  */
-import { useEffect } from 'react';
+import { type ReactNode, useEffect } from 'react';
 
-import { COLOR_AVISO, COLOR_VELO } from './colores.js';
-import { cerrarInforme, useInformes } from './informes.js';
+import {
+  COLOR_AVISO,
+  COLOR_VELO,
+  INFORME_CODIGO_FONDO,
+  INFORME_CODIGO_TEXTO,
+  INFORME_OK,
+  INFORME_TITULO,
+  PLACA_ALERTA,
+} from './colores.js';
+import { cerrarInforme, seccionesDe, tonoEstado, useInformes } from './informes.js';
 import { nombres } from './personal.js';
 
 const fecha = (ms: number) =>
@@ -17,6 +26,34 @@ const fecha = (ms: number) =>
         minute: '2-digit',
       })
     : '';
+
+const COLOR_ESTADO = {
+  ok: INFORME_OK,
+  cambios: COLOR_AVISO,
+  mal: PLACA_ALERTA,
+  nada: INFORME_TITULO,
+};
+
+/** Texto con lo que va entre `comillas invertidas` resaltado (rutas, funciones, comandos). */
+function conCodigo(t: string): ReactNode[] {
+  return t.split(/(`[^`]+`)/).map((parte, k) =>
+    parte.startsWith('`') && parte.endsWith('`') && parte.length > 2 ? (
+      <span
+        key={k}
+        style={{
+          color: INFORME_CODIGO_TEXTO,
+          background: INFORME_CODIGO_FONDO,
+          padding: '0 4px',
+          overflowWrap: 'anywhere',
+        }}
+      >
+        {parte.slice(1, -1)}
+      </span>
+    ) : (
+      parte
+    ),
+  );
+}
 
 export function PanelInforme() {
   const { abierto: i } = useInformes();
@@ -32,6 +69,7 @@ export function PanelInforme() {
 
   if (!i) return null;
   const quien = nombres().agentes[i.tipo] ?? i.tipo;
+  const colorEstado = COLOR_ESTADO[tonoEstado(i.estado)];
   return (
     <>
       <div
@@ -41,56 +79,97 @@ export function PanelInforme() {
         aria-hidden="true"
       />
       <div
-        className="pixel-panel fixed flex flex-col gap-3 px-10 py-8"
+        className="pixel-panel fixed flex flex-col gap-6 px-10 py-8"
         style={{
           left: '50%',
           top: '50%',
           transform: 'translate(-50%, -50%)',
           zIndex: 70,
-          width: 'min(760px, calc(100vw - 32px))',
+          width: 'min(900px, calc(100vw - 32px))',
           maxHeight: 'calc(100vh - 48px)',
           overflowY: 'auto',
+          lineHeight: 1.45,
         }}
         role="dialog"
         aria-label={`Informe de ${quien}`}
         data-testid="panel-informe"
       >
-        <div className="flex items-center gap-6">
-          <span style={{ fontSize: '26px', fontWeight: 'bold' }}>Informe de {quien}</span>
-          <button
-            style={{
-              marginLeft: 'auto',
-              fontSize: '18px',
-              textDecoration: 'underline',
-              cursor: 'pointer',
-            }}
-            onClick={cerrarInforme}
-          >
-            cerrar
-          </button>
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-6">
+            <span style={{ fontSize: '30px', fontWeight: 'bold' }}>Informe de {quien}</span>
+            <button
+              style={{
+                marginLeft: 'auto',
+                fontSize: '18px',
+                textDecoration: 'underline',
+                cursor: 'pointer',
+              }}
+              onClick={cerrarInforme}
+            >
+              cerrar
+            </button>
+          </div>
+          {i.titulo && <span style={{ fontSize: '22px' }}>{conCodigo(i.titulo)}</span>}
+          {i.fecha > 0 && (
+            <span style={{ fontSize: '16px', color: INFORME_TITULO }}>{fecha(i.fecha)}</span>
+          )}
         </div>
-        <span style={{ fontSize: '16px', opacity: 0.75 }}>
-          {[i.titulo, fecha(i.fecha)].filter(Boolean).join(' · ')}
-        </span>
-        <span style={{ fontSize: '20px' }}>
-          <b>Estado:</b> {i.estado || 'sin estado'}
-        </span>
-        {i.necesitaCeo && (
-          <span style={{ fontSize: '20px', color: COLOR_AVISO, whiteSpace: 'pre-wrap' }}>
-            <b>Necesita tu decisión:</b> {i.decision || 'escaló el pedido (ver el informe).'}
-          </span>
-        )}
-        <div
-          style={{
-            fontSize: '16px',
-            whiteSpace: 'pre-wrap',
 
-            opacity: 0.9,
-            marginTop: 8,
-          }}
-        >
-          {i.texto}
+        <div className="flex items-start gap-3" style={{ fontSize: '22px' }}>
+          <span
+            style={{
+              border: `2px solid ${colorEstado}`,
+              color: colorEstado,
+              padding: '0 8px',
+              fontWeight: 'bold',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {(i.estado.match(/^[A-ZÁÉÍÓÚ ]+\b/)?.[0] ?? i.estado).trim() || 'SIN ESTADO'}
+          </span>
+          <span style={{ opacity: 0.85 }}>
+            {i.estado.replace(/^[A-ZÁÉÍÓÚ ]+\b/, '').replace(/^\s*\(|\)\s*$/g, '')}
+          </span>
         </div>
+
+        {i.necesitaCeo && (
+          <div
+            className="flex flex-col gap-1"
+            style={{ borderLeft: `4px solid ${COLOR_AVISO}`, paddingLeft: 12 }}
+          >
+            <span style={{ fontSize: '18px', fontWeight: 'bold', color: COLOR_AVISO }}>
+              Necesita tu decisión
+            </span>
+            <span style={{ fontSize: '22px', whiteSpace: 'pre-wrap' }}>
+              {conCodigo(i.decision || 'Escaló el pedido: mirá el informe.')}
+            </span>
+          </div>
+        )}
+
+        {seccionesDe(i.texto).map((s, k) => (
+          <section key={k} className="flex flex-col gap-1">
+            {s.titulo && (
+              <span style={{ fontSize: '19px', fontWeight: 'bold', color: INFORME_TITULO }}>
+                {s.titulo}
+              </span>
+            )}
+            {s.parrafos.map((p, j) => (
+              <p key={j} style={{ fontSize: '21px', margin: 0 }}>
+                {conCodigo(p)}
+              </p>
+            ))}
+            {s.vinetas.length > 0 && (
+              <ul
+                className="flex flex-col gap-1"
+                style={{ fontSize: '21px', margin: 0, paddingLeft: 22, listStyle: 'disc' }}
+              >
+                {s.vinetas.map((v, j) => (
+                  <li key={j}>{conCodigo(v)}</li>
+                ))}
+              </ul>
+            )}
+          </section>
+        ))}
       </div>
     </>
   );
