@@ -7,6 +7,9 @@
  * 3. Presentando (dice su aviso por voz, ver presentandoDe): sube al escenario de Presentaciones mientras habla, uno
  *    por vez; los que avisan mientras otro habla esperan su turno sentados en la sala (enFilaDe).
  * 3b. En una reunión (reuniones.ts): va a una silla de Reuniones, al lado del otro, y cuando llegan hablan.
+ * 3c. Oficina por niveles: mientras un manager trabaja para la sesión, ella (el CEO) espera sentada en el escritorio del
+ *    CEO del Brain. El manager va a su escritorio en la oficina de su proyecto y los agentes que él lanza se sientan a
+ *    su lado (baseDe).
  * 4. Sin uso (terminó el turno, espera tu próximo mensaje, o una sesión restaurada sin nada en curso; ver enUso en
  *    personal.ts): si terminó hablando por voz se queda sentado en Presentaciones (así se ve quién te habló); si no, se
  *    va a la Cafetería y se sienta; si no hay sillones libres, se queda parado ahí. Vuelve en cuanto
@@ -19,6 +22,8 @@
  */
 import {
   esAsientoReservado,
+  esSillaCeo,
+  esSillaManager,
   SALA_CAFETERIA,
   SALA_PRESENTACIONES,
   SALA_REUNIONES,
@@ -26,7 +31,7 @@ import {
 import type { OfficeState } from '../office/engine/officeState.js';
 import { getCatalogEntry } from '../office/layout/furnitureCatalog.js';
 import { isWalkable } from '../office/layout/tileMap.js';
-import type { Character } from '../office/types.js';
+import type { Character, Seat } from '../office/types.js';
 import { CharacterState, Direction } from '../office/types.js';
 import { conversar, turnosDe } from './burbujas.js';
 import { calcularLuces, type EstadoLuz, setLuces, setSalasPrendidas } from './luces.js';
@@ -47,6 +52,8 @@ import {
   enFilaDe,
   enUso,
   habloRecienDe,
+  jefeDe,
+  managerDe,
   padreDe,
   podarPersonal,
   presentandoDe,
@@ -55,7 +62,7 @@ import {
   vozDe,
 } from './personal.js';
 import { marcoPizarra, setGentePizarra } from './pizarra.js';
-import { setPlacas } from './placas.js';
+import { setPlacas, tipoManagerDe } from './placas.js';
 import {
   DURACION_PROYECTO_MS,
   ESPERA_LLEGADA_MS,
@@ -133,6 +140,8 @@ interface Base {
   sentado?: boolean;
   silla?: string; // uid de la silla que tomó prestada
   hecho: number; // cuándo se calculó (ms)
+  /** Se calculó al lado de su manager (oficina por niveles). */
+  deJefe?: boolean;
 }
 const bases = new Map<number, Base>();
 
@@ -148,19 +157,55 @@ function duenoLaQuiere(os: OfficeState, silla: string): boolean {
 }
 
 export function baseDe(os: OfficeState, sub: Character, ahora = Date.now()): Base {
+  // Oficina por niveles: el manager va a su escritorio, en la oficina de su proyecto ("manager-erp" → ERP).
+  const tipo = managerDe(sub.id);
+  if (tipo) {
+    for (const [uid, s] of os.seats) {
+      if (!esSillaManager(uid) || tipoManagerDe(os.seatZone(uid) ?? '') !== tipo) continue;
+      return {
+        col: s.seatCol,
+        row: s.seatRow,
+        facingDir: s.facingDir,
+        sentado: true,
+        silla: uid,
+        hecho: ahora,
+      };
+    }
+  }
+  // Los agentes que lanza un manager se sientan a su lado; los demás, al lado de la sesión que los lanzó.
+  const jefe = jefeDe(sub.id);
+  const baseJefe = jefe !== null ? bases.get(jefe) : undefined;
   const padre = sub.parentAgentId !== null ? os.characters.get(sub.parentAgentId) : undefined;
-  const silla = padre?.seatId ? os.seats.get(padre.seatId) : undefined;
-  if (!padre?.seatId || !silla) return { col: sub.tileCol, row: sub.tileRow, hecho: ahora };
-  const oficina = os.seatZone(padre.seatId);
+  const sillaPadre = padre?.seatId ? os.seats.get(padre.seatId) : undefined;
+  const ancla = baseJefe?.silla
+    ? {
+        uid: baseJefe.silla,
+        col: baseJefe.col,
+        row: baseJefe.row,
+        oficina: os.seatZone(baseJefe.silla),
+        deJefe: true,
+      }
+    : padre?.seatId && sillaPadre
+      ? {
+          uid: padre.seatId,
+          col: sillaPadre.seatCol,
+          row: sillaPadre.seatRow,
+          oficina: os.seatZone(padre.seatId),
+          deJefe: false,
+        }
+      : null;
+  if (!ancla) return { col: sub.tileCol, row: sub.tileRow, hecho: ahora };
+  const silla = { seatCol: ancla.col, seatRow: ancla.row };
+  const oficina = ancla.oficina;
   if (oficina) {
     const prestadas = new Set<string>();
     for (const [id, b] of bases) if (b.silla && id !== sub.id) prestadas.add(b.silla);
     const duenos = new Map<string, Character>();
     for (const c of os.characters.values()) if (c.seatId && !c.isSubagent) duenos.set(c.seatId, c);
-    let libre: [string, typeof silla] | null = null;
+    let libre: [string, Seat] | null = null;
     let clave = Infinity;
     for (const [uid, s] of os.seats) {
-      if (uid === padre.seatId || prestadas.has(uid) || os.seatZone(uid) !== oficina) continue;
+      if (uid === ancla.uid || prestadas.has(uid) || os.seatZone(uid) !== oficina) continue;
       if (esAsientoReservado(uid)) continue; // la silla del manager o del CEO
       const dueno = duenos.get(uid);
       if (dueno ? dueno.lugar !== 'cafeteria' : s.assigned) continue;
@@ -180,27 +225,32 @@ export function baseDe(os: OfficeState, sub: Character, ahora = Date.now()): Bas
         sentado: true,
         silla: uid,
         hecho: ahora,
+        deJefe: ancla.deJefe,
       };
     }
   }
   const otras = [...bases].filter(([id]) => id !== sub.id).map(([, b]) => b); // sin la base del propio sub
   const pegado = (t: { col: number; row: number }) =>
     otras.some((b) => Math.max(Math.abs(b.col - t.col), Math.abs(b.row - t.row)) < 2);
-  let mejor: Base = { col: sub.tileCol, row: sub.tileRow, hecho: ahora };
+  let mejor: Base = { col: sub.tileCol, row: sub.tileRow, hecho: ahora, deJefe: ancla.deJefe };
   let dist = Infinity;
   for (const t of os.walkableTiles) {
     if (pegado(t)) continue;
     const d = Math.abs(t.col - silla.seatCol) + Math.abs(t.row - silla.seatRow);
     if (d > 0 && d < dist) {
       dist = d;
-      mejor = { col: t.col, row: t.row, hecho: ahora };
+      mejor = { col: t.col, row: t.row, hecho: ahora, deJefe: ancla.deJefe };
     }
   }
   return mejor;
 }
 
-/** Hay que volver a calcular el lugar del sub-agente: volvió el dueño del escritorio prestado, o quedó en el piso. */
-function revisarBase(os: OfficeState, b: Base, ahora: number): boolean {
+/**
+ * Hay que volver a calcular el lugar del sub-agente: volvió el dueño del escritorio prestado, quedó en el piso, o tiene
+ * manager y todavía no se sentó a su lado (el manager llegó a su escritorio después).
+ */
+function revisarBase(os: OfficeState, sub: Character, b: Base, ahora: number): boolean {
+  if (!b.deJefe && jefeDe(sub.id) !== null) return true;
   if (b.silla) return duenoLaQuiere(os, b.silla);
   return ahora - b.hecho >= REINTENTO_BASE_MS;
 }
@@ -271,6 +321,24 @@ export function moverSegunActividad(os: OfficeState, ch: Character, ahora: numbe
   return true;
 }
 
+// ── Oficina por niveles ─────────────────────────────────────────
+
+/** La sesión tiene un manager vivo (lanzado por ella). */
+export function tieneManager(os: OfficeState, id: number): boolean {
+  for (const c of os.characters.values()) {
+    if (c.isSubagent && c.parentAgentId === id && c.matrixEffect !== 'despawn' && managerDe(c.id))
+      return true;
+  }
+  return false;
+}
+
+/** La silla del CEO si está libre para esta sesión (la primera que delega se la queda), o null. */
+export function sillaCeoPara(os: OfficeState, ch: Character): Seat | null {
+  for (const otro of os.characters.values()) if (otro !== ch && otro.lugar === 'ceo') return null;
+  for (const [uid, s] of os.seats) if (esSillaCeo(uid)) return s;
+  return null;
+}
+
 // ── Reuniones ───────────────────────────────────────────────────
 
 function proyectoDe(os: OfficeState, ch: Character): string | undefined {
@@ -329,7 +397,7 @@ export function tickPersonal(os: OfficeState, ahora = Date.now()): void {
     if (ch.isSubagent) {
       const b = bases.get(ch.id);
       if (!b) bases.set(ch.id, baseDe(os, ch, ahora));
-      else if (revisarBase(os, b, ahora)) {
+      else if (revisarBase(os, ch, b, ahora)) {
         const nueva = baseDe(os, ch, ahora);
         const cambio = nueva.col !== b.col || nueva.row !== b.row;
         bases.set(ch.id, nueva);
@@ -392,6 +460,25 @@ export function tickPersonal(os: OfficeState, ahora = Date.now()): void {
       continue;
     }
     if (ch.lugar === 'reunion') alEscritorio(ch); // terminó la reunión: cada uno a lo suyo
+
+    // 3c. Un manager trabaja para esta sesión: espera en el escritorio del CEO.
+    if (!ch.isSubagent) {
+      const silla = tieneManager(os, ch.id) ? sillaCeoPara(os, ch) : null;
+      if (silla) {
+        if (ch.lugar !== 'ceo') {
+          ch.lugar = 'ceo';
+          ch.lugarDesde = ahora;
+          ch.destino = {
+            seatCol: silla.seatCol,
+            seatRow: silla.seatRow,
+            facingDir: silla.facingDir,
+            sentado: true,
+          };
+        }
+        continue;
+      }
+      if (ch.lugar === 'ceo') alEscritorio(ch); // el manager terminó: vuelve a lo suyo
+    }
 
     // 4. Sin uso (terminó el turno, o restaurada al abrir la página sin nada en curso): a la cafetería.
     if (!enUso(ch, ahora)) {

@@ -36,7 +36,8 @@ export type Lugar =
   | 'cafeteria'
   | 'reunion'
   | 'presentacion'
-  | 'fila'; // esperando su turno para el escenario de Presentaciones
+  | 'fila' // esperando su turno para el escenario de Presentaciones
+  | 'ceo'; // en el escritorio del CEO (Brain) mientras un manager trabaja para esta sesión
 
 /** Sala de cada lugar; null = donde esté el mueble (la mesa contable, en Finanzas). */
 export const SALA_DE_LUGAR: Record<Lugar, string | null> = {
@@ -48,6 +49,7 @@ export const SALA_DE_LUGAR: Record<Lugar, string | null> = {
   reunion: SALA_REUNIONES,
   presentacion: SALA_PRESENTACIONES,
   fila: SALA_PRESENTACIONES,
+  ceo: null,
 };
 
 const BIBLIOTECA = new Set([

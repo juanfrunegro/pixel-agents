@@ -99,6 +99,12 @@ export function separarStatus(status: string): { texto: string; meta: MetaSub | 
   }
 }
 
+/**
+ * Oficina por niveles: el agente que lanzó un sub-agente (un manager que delega). El servidor manda `jefeToolId` en los
+ * mensajes del agente anidado (server/src/subagentWatch.ts): spawn del anidado → spawn de su manager.
+ */
+const jefePorTool = new Map<string, string>();
+
 /** Primer status de un sub-agente que todavía no estaba registrado (clave padre|toolId); registrarSub lo aplica. */
 const statusPendiente = new Map<string, string>();
 
@@ -113,6 +119,10 @@ export function alMensaje(msg: any): void {
       metaDesde.set(msg.toolId, Date.now());
       avisar();
     }
+  }
+  if (typeof msg?.jefeToolId === 'string' && typeof msg.parentToolId === 'string') {
+    if (jefePorTool.size >= 200) jefePorTool.clear();
+    jefePorTool.set(msg.parentToolId, msg.jefeToolId);
   }
   if (
     msg &&
@@ -311,6 +321,23 @@ export function metaDe(charId: number): MetaSub | null {
 
 export function padreDe(charId: number): number | null {
   return estado.subs.get(charId)?.padre ?? null;
+}
+
+/** El sub-agente que lanzó a este (su manager), o null si lo lanzó la sesión directamente. */
+export function jefeDe(charId: number): number | null {
+  const s = estado.subs.get(charId);
+  const jefeTool = s ? jefePorTool.get(s.toolId) : undefined;
+  if (!s || !jefeTool) return null;
+  for (const [id, otro] of estado.subs) {
+    if (otro.padre === s.padre && otro.toolId === jefeTool) return id;
+  }
+  return null;
+}
+
+/** Tipo de manager del sub-agente ("manager-erp"), o null si no es un manager. */
+export function managerDe(charId: number): string | null {
+  const t = metaDe(charId)?.t;
+  return t && t.startsWith('manager-') ? t : null;
 }
 
 /** Modelo con el que trabaja: el de la sesión (transcript) o el del sub-agente ('hereda' = el del padre). */
