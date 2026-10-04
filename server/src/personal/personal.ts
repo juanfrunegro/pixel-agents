@@ -25,6 +25,13 @@ import {
   vozDicha,
   vozPedida,
 } from './senales.js';
+import {
+  enviarWhatsapp,
+  escribirWhatsapp,
+  EsperaDeFin,
+  pidioWhatsapp,
+  resumenParaAviso,
+} from './whatsapp.js';
 
 // Rutas calculadas al usarlas (no al importar): los tests del original simulan os.homedir().
 const claude = (): string => path.join(os.homedir() || '.', '.claude');
@@ -421,6 +428,10 @@ interface InfoSesion {
   presentaMs?: number;
   /** Interruptor puesto desde Pixel (tanda 5): manda sobre el prompt. */
   vozOverride: OverrideVoz;
+  /** Pidió que le avise por WhatsApp cuando termine todo (whatsapp.ts). */
+  whatsapp: boolean;
+  /** Texto de la última respuesta (para el detalle del aviso por WhatsApp). */
+  ultimoTexto?: string;
 }
 
 const sesiones = new WeakMap<AgentState, InfoSesion>();
@@ -483,6 +494,18 @@ export function esDeWsl(archivo: string | undefined): boolean {
   return !!archivo && /^[\\/]{2}wsl(\.localhost|\$)[\\/]/i.test(archivo);
 }
 
+/** El texto de una respuesta del asistente (sin herramientas), o undefined. */
+function textoDeRespuesta(record: unknown): string | undefined {
+  const r = record as { type?: string; message?: { content?: unknown } };
+  if (r?.type !== 'assistant' || !Array.isArray(r.message?.content)) return undefined;
+  const t = (r.message.content as Array<{ type?: string; text?: unknown }>)
+    .filter((b) => b?.type === 'text' && typeof b.text === 'string')
+    .map((b) => b.text as string)
+    .join(' ')
+    .trim();
+  return t ? t.slice(0, 2000) : undefined;
+}
+
 function sumar(info: InfoSesion, r: Registro): boolean {
   const u = r.message?.usage;
   if (!u) return false;
@@ -511,6 +534,7 @@ function infoDe(agent: AgentState): InfoSesion {
     senales: senalesNuevas(),
     voz: false,
     vozOverride: null,
+    whatsapp: false,
   };
   if (agent.jsonlFile) info.vozOverride = leerOverrideVoz(sesionDe(agent.jsonlFile));
   sesiones.set(agent, info);
@@ -551,7 +575,8 @@ export function mensajeInfo(agentId: number, agent: AgentState): Record<string, 
     senales.deployDesde === null &&
     !info.voz &&
     info.presento === undefined &&
-    info.vozOverride === null
+    info.vozOverride === null &&
+    !info.whatsapp
   )
     return null;
   return {
@@ -567,6 +592,7 @@ export function mensajeInfo(agentId: number, agent: AgentState): Record<string, 
     presentaMs: info.presentaMs ?? null,
     vozOverride: info.vozOverride,
     vozActiva: vozActiva(info.voz, info.vozOverride),
+    whatsapp: info.whatsapp,
   };
 }
 
@@ -591,6 +617,27 @@ export function cambiarVozSesion(
   return true;
 }
 
+/** Interruptor del aviso por WhatsApp de una sesión (mensaje setWhatsappSesion, solo con token). */
+export function cambiarWhatsappSesion(
+  store: AgentStateStore,
+  agentId: unknown,
+  valor: unknown,
+): boolean {
+  if (typeof agentId !== 'number') return false;
+  const agent = store.get(agentId);
+  if (!agent?.jsonlFile || agent.leadAgentId) return false;
+  const sesion = sesionDe(agent.jsonlFile);
+  if (!escribirWhatsapp(sesion, valor)) return false;
+  const info = infoDe(agent);
+  info.whatsapp = valor === true;
+  if (!info.whatsapp) esperaDeFin.olvidar(sesion);
+  const msg = mensajeInfo(agentId, agent);
+  if (msg) store.broadcast(msg as never);
+  return true;
+}
+
+const esperaDeFin = new EsperaDeFin();
+
 /** Llamado por cada registro del transcript (desde updateContextUsage). */
 export function registrarUso(
   agentId: number,
@@ -601,6 +648,8 @@ export function registrarUso(
   const primera = !vigente(agent);
   const info = infoDe(agent);
   const sumo = sumar(info, record as Registro);
+  const texto = textoDeRespuesta(record);
+  if (texto) info.ultimoTexto = texto;
   const cambioLimite = aplicarLimite(info, record as Registro);
   // En la primera lectura infoDe ya contó este registro (está en el transcript): aplicarlo otra vez duplicaría errores.
   const cambioSenal = primera ? false : aplicarSenal(info.senales, record as never);
@@ -661,6 +710,23 @@ export function revisarSenales(store: AgentStateStore, ahora = Date.now()): void
         info.presentaMs = ms;
         cambio = true;
       }
+    }
+    // Aviso por WhatsApp cuando termina todo (whatsapp.ts): la marca puede venir de la ficha o del prompt.
+    const pedido = agent.leadAgentId ? null : pidioWhatsapp(sesion);
+    const whatsapp = pedido !== null;
+    if (whatsapp !== info.whatsapp) {
+      info.whatsapp = whatsapp;
+      cambio = true;
+    }
+    if (pedido === null) esperaDeFin.olvidar(sesion);
+    else if (esperaDeFin.revisar(sesion, agent, ahora, agent.lastDataAt > pedido)) {
+      enviarWhatsapp(
+        `Terminó tu sesión de ${agent.folderName ?? 'Claude'}`,
+        resumenParaAviso(info.ultimoTexto),
+      );
+      escribirWhatsapp(sesion, false);
+      info.whatsapp = false;
+      cambio = true;
     }
     const r = resumen(info.senales, ahora);
     const ultimo = deployVisto.get(agent);

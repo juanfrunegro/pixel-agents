@@ -37,6 +37,8 @@ interface Estado {
       presento?: number | null;
       /** Cuánto dura ese aviso (ms, lo estima el hook); null = no se sabe (PRESENTACION_MS). */
       presentaMs?: number | null;
+      /** Pidió que le avise por WhatsApp cuando termine todo. */
+      whatsapp?: boolean;
       /** Interruptor puesto desde Pixel (tanda 5): on/off, o null = seguir al prompt. */
       vozOverride?: 'on' | 'off' | null;
       /** Va a avisar por voz al terminar el turno (el interruptor manda sobre el prompt). */
@@ -160,6 +162,7 @@ export function alMensaje(msg: any): void {
       presentaMs: typeof msg.presentaMs === 'number' ? msg.presentaMs : null,
       vozOverride: msg.vozOverride === 'on' || msg.vozOverride === 'off' ? msg.vozOverride : null,
       vozActiva: typeof msg.vozActiva === 'boolean' ? msg.vozActiva : msg.voz === true,
+      whatsapp: msg.whatsapp === true,
     });
     avisar();
   } else if (msg?.type === 'agentClosed' && typeof msg.id === 'number') {
@@ -458,6 +461,11 @@ export function vozDe(charId: number): boolean {
 /** La sesión pidió el aviso por voz en el prompt (marca del hook), sin mirar el interruptor. */
 export function vozPedidaDe(charId: number): boolean {
   return !estado.subs.has(charId) && estado.info.get(charId)?.voz === true;
+}
+
+/** Pidió el aviso por WhatsApp cuando termine todo (solo sesiones principales). */
+export function whatsappDe(charId: number): boolean {
+  return !estado.subs.has(charId) && estado.info.get(charId)?.whatsapp === true;
 }
 
 /** Interruptor puesto desde Pixel para esta sesión, o null si sigue al prompt. */

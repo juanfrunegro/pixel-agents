@@ -26,7 +26,12 @@ import {
   recargarOficina,
   recordarCarpeta,
 } from './personal/oficina.js';
-import { cambiarVozSesion, guardarNombre, mensajeNombres } from './personal/personal.js';
+import {
+  cambiarVozSesion,
+  cambiarWhatsappSesion,
+  guardarNombre,
+  mensajeNombres,
+} from './personal/personal.js';
 import { escribirConfigVoz, leerConfigVoz } from './personal/senales.js';
 import { mensajeSkins } from './personal/skins.js';
 import type { ConsentEffects } from './providers/hook/consentExecutor.js';
@@ -387,6 +392,13 @@ export function handleClientMessage(
       // Interruptor del aviso por voz (sala de comunicaciones o ficha). Solo con token; el servidor valida la sesión.
       if (!ctx.privileged) break;
       cambiarVozSesion(store, msg.id, msg.valor);
+      break;
+    }
+
+    case 'setWhatsappSesion': {
+      // "Avisame por WhatsApp cuando termine todo" (ficha de la sesión). Solo con token; el servidor valida.
+      if (!ctx.privileged) break;
+      cambiarWhatsappSesion(store, msg.id, msg.valor);
       break;
     }
 

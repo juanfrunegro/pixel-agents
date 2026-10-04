@@ -82,7 +82,8 @@ export type ClientMessage =
   | PedirConfigVoz
   | SetConfigVoz
   | PedirApagado
-  | SetApagado;
+  | SetApagado
+  | SetWhatsappSesion;
 
 export interface ProviderCapabilities {
   type: 'providerCapabilities';
@@ -350,6 +351,7 @@ export interface AgentInfo {
   presentaMs?: number | null;
   vozOverride?: string | null;
   vozActiva?: boolean;
+  whatsapp?: boolean;
 }
 
 export interface AgentNamesLoaded {
@@ -389,11 +391,11 @@ export interface LugarOficina {
 export interface CandidatoOficina {
   nombre: string;
   ruta: string;
-  origen: AnonymousSchema_232;
+  origen: AnonymousSchema_233;
   modificado: number;
 }
 
-export type AnonymousSchema_232 = 'orca' | 'carpeta' | 'otra';
+export type AnonymousSchema_233 = 'orca' | 'carpeta' | 'otra';
 
 export interface OficinaAsignada {
   type: 'oficinaAsignada';
@@ -407,10 +409,10 @@ export interface SkinsPersonalesLoaded {
 
 export interface ConfigVoz {
   type: 'configVoz';
-  casos: AnonymousSchema_239;
+  casos: AnonymousSchema_240;
 }
 
-export interface AnonymousSchema_239 {
+export interface AnonymousSchema_240 {
   pregunta: boolean;
   permiso: boolean;
   fin_pregunta: boolean;
@@ -556,10 +558,10 @@ export interface RecargarOficina {
 export interface AbrirProyecto {
   type: 'abrirProyecto';
   sala: string;
-  accion: AnonymousSchema_297;
+  accion: AnonymousSchema_298;
 }
 
-export type AnonymousSchema_297 = 'carpeta' | 'vscode';
+export type AnonymousSchema_298 = 'carpeta' | 'vscode';
 
 export interface AsignarOficina {
   type: 'asignarOficina';
@@ -584,11 +586,11 @@ export interface PedirConfigVoz {
 
 export interface SetConfigVoz {
   type: 'setConfigVoz';
-  caso: AnonymousSchema_308;
+  caso: AnonymousSchema_309;
   valor: boolean;
 }
 
-export type AnonymousSchema_308 = 'pregunta' | 'permiso' | 'fin_pregunta' | 'esperando';
+export type AnonymousSchema_309 = 'pregunta' | 'permiso' | 'fin_pregunta' | 'esperando';
 
 export interface PedirApagado {
   type: 'pedirApagado';
@@ -597,4 +599,10 @@ export interface PedirApagado {
 export interface SetApagado {
   type: 'setApagado';
   opcion: OpcionApagado;
+}
+
+export interface SetWhatsappSesion {
+  type: 'setWhatsappSesion';
+  id: number;
+  valor: boolean;
 }

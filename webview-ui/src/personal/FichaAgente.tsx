@@ -32,6 +32,7 @@ import {
   vozDe,
 } from './personal.js';
 import { skinDe } from './skins.js';
+import { InterruptorWhatsapp } from './Whatsapp.js';
 
 interface Props {
   officeState: OfficeState;
@@ -211,6 +212,11 @@ export function FichaAgente({ officeState, subagentCharacters }: Props) {
       {padre === null && !ch.isSubagent && (
         <Fila etiqueta="Voz">
           <InterruptorVoz id={id} />
+        </Fila>
+      )}
+      {padre === null && !ch.isSubagent && (
+        <Fila etiqueta="WhatsApp">
+          <InterruptorWhatsapp id={id} />
         </Fila>
       )}
       <Fila etiqueta="En la oficina">{duracion(inicioDe(id))}</Fila>

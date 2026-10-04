@@ -166,6 +166,7 @@ components:
         - $ref: '#/components/schemas/SetConfigVoz'
         - $ref: '#/components/schemas/PedirApagado'
         - $ref: '#/components/schemas/SetApagado'
+        - $ref: '#/components/schemas/SetWhatsappSesion'
       discriminator: type
 
     # ── Personal (copia de juanfrunegro) ──────────────────────────
@@ -218,6 +219,9 @@ components:
           type: [string, 'null']
         vozActiva:
           description: Si al terminar el turno va a avisar por voz (prompt + interruptor; el interruptor manda).
+          type: boolean
+        whatsapp:
+          description: Pidió que le avise por WhatsApp cuando termine todo (~/.pixel-agents/whatsapp/<sesión>.on).
           type: boolean
 
     AgentNamesLoaded:
@@ -350,6 +354,22 @@ components:
           type: integer
         valor:
           type: [string, 'null']
+
+    SetWhatsappSesion:
+      description: >-
+        "Avisame por WhatsApp cuando termine todo" de una sesión principal (ficha). El servidor escribe o borra
+        ~/.pixel-agents/whatsapp/<sesión>.on y avisa una sola vez cuando la sesión y sus sub-agentes terminaron. Solo
+        con token.
+      type: object
+      additionalProperties: false
+      required: [type, id, valor]
+      properties:
+        type:
+          const: setWhatsappSesion
+        id:
+          type: integer
+        valor:
+          type: boolean
 
     PedirConfigVoz:
       description: >-
