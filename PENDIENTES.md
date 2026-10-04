@@ -1,5 +1,11 @@
 # Pendientes
 
+- **Etapa 4 de diseño: hecha y aprobada por Juan (4/10)** — Diseño (c0feac5), Presentaciones con parlantes (f5329b2), oficina del CEO con minibar (7558fe4), interruptor "Abrir sola" (fc8df95 + hook en claude-config ab053ca). Ideas de diseño propuestas y **sin hacer** (que Juan elija; captura antes de cada commit):
+  - Biblioteca: rincón de lectura (sillón, lámpara `LAMPARA`, alfombra).
+  - Reuniones: alfombra bajo cada mesa y algo en la pared.
+  - Oficinas de proyecto: alfombra del color del proyecto bajo el escritorio del manager (todas se ven iguales).
+  - Cafetería: barra con cafetera (mueble nuevo en `scripts/personal/muebles.mjs`).
+  - Las de la etapa 4 que siguen abiertas: placa del manager con su último informe, línea de delegación, costo del día por oficina, semáforo de la lista roja, contratistas clickeables (ver `~/.claude/relevos/2026-10-04-pixel-oficina-etapa4.md`).
 - **Oficina por niveles: hecha el 4/10 (ff67cdc, 3b85043, 3ffa472, 07d2c42, a3260dd).** Decisiones de Juan: CEO en el Brain; escritorio fijo del manager en cada oficina; los agentes del manager se sientan a su lado; contratistas desde Orca; se suma a las salas compartidas. Probado en vivo con manager-erp → extractor-reglas: la sesión va al escritorio del CEO, Rulo al suyo en ERP y el agente que lanzó a su lado; al terminar salen. Lo que queda:
   - **Contratistas sin probar con un Codex/Pi real:** la cabina se vio con una lista inyectada en la conexión (captura del 4/10). La próxima vez que corra uno desde Orca, mirar que aparezca y que su `agentType` sea el esperado (`codex`, `pi`, `gemini`, `antigravity`).
   - **Un solo escritorio de CEO:** si dos sesiones delegan a la vez, la segunda sigue en su oficina. Al lanzar al manager, primero se juntan a hablar (reunión) y después cada uno a su escritorio.
