@@ -81,7 +81,16 @@ export class PixelAgentsServer {
     // server (blank page). Prune dead entries first so a crashed server's
     // stale file never blocks discovery of a live one.
     const registry = this.readAndPruneRegistry();
-    const candidate = registry.find((e) => e.servesSpa === wantsSpa);
+    // Personal: un PID vivo no alcanza. Windows recicla los PID enseguida (el del server muerto lo tomó Chrome) y el
+    // server nuevo se quedaba "reutilizando" uno que no existe, sin abrir el puerto. Se reutiliza solo si responde.
+    let candidate: ServerConfig | undefined;
+    for (const entry of registry.filter((e) => e.servesSpa === wantsSpa)) {
+      if (await respondeHealth(entry.port)) {
+        candidate = entry;
+        break;
+      }
+      this.deleteRegistryFile(entry);
+    }
     if (candidate) {
       this.config = candidate;
       this.ownsServer = false;
@@ -271,6 +280,15 @@ export class PixelAgentsServer {
   }
 
   /** Delete this server's own registry entry (self-only cleanup, mirrors deleteServerJson). */
+  /** Personal: borra la entrada de otro server que ya no responde (PID reciclado por otro proceso). */
+  private deleteRegistryFile(config: Pick<ServerConfig, 'pid' | 'port'>): void {
+    try {
+      fs.unlinkSync(this.getRegistryFilePath(config));
+    } catch {
+      // File may already be gone
+    }
+  }
+
   private deleteRegistryEntry(): void {
     if (!this.config) return;
     try {
@@ -279,6 +297,18 @@ export class PixelAgentsServer {
     } catch {
       // File may already be gone
     }
+  }
+}
+
+/** Personal: true si hay un server de Pixel escuchando en ese puerto (GET /api/health, sin auth). */
+async function respondeHealth(port: number): Promise<boolean> {
+  try {
+    const r = await fetch(`http://127.0.0.1:${port}/api/health`, {
+      signal: AbortSignal.timeout(1500),
+    });
+    return r.ok;
+  } catch {
+    return false;
   }
 }
 

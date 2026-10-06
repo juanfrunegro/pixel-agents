@@ -257,6 +257,29 @@ describe('PixelAgentsServer', () => {
     expect(registryFiles()).toHaveLength(1); // only the freshly-started server's entry remains
   });
 
+  // 16b. Personal: live PID but nothing listening (Windows recycled the dead server's PID) -> not reused
+  it('does not reuse a live-pid entry whose port does not answer; starts its own', async () => {
+    fs.mkdirSync(registryDir, { recursive: true });
+    const recycledFile = path.join(registryDir, `${process.pid}-1.json`);
+    fs.writeFileSync(
+      recycledFile,
+      JSON.stringify({
+        port: 1,
+        pid: process.pid,
+        token: 'recycled',
+        startedAt: 0,
+        servesSpa: true,
+        protocol: 1,
+      }),
+    );
+
+    const config = await server.start({ embedded: false });
+
+    expect(config.port).not.toBe(1);
+    expect(fs.existsSync(recycledFile)).toBe(false);
+    expect(registryFiles()).toHaveLength(1);
+  });
+
   // 17. Structurally invalid live-pid entries are malformed, not reusable
   it('prunes a structurally invalid live-pid entry instead of reusing it', async () => {
     fs.mkdirSync(registryDir, { recursive: true });
